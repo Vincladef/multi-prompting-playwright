@@ -1,46 +1,64 @@
-# Multi-Prompting Playwright
+# Multi-Prompting : moteur Playwright sur GitHub Actions
 
-Moteur séquentiel déterministe pour automatiser des échanges dans **un environnement autorisé**. Le mode `demo` ouvre une fausse interface de conversation locale : il permet de vérifier réellement Chromium, Playwright et l'ordre d'envoi sans solliciter ChatGPT.
+Prototype déterministe et **gratuit dans un dépôt public**, sans Render, Oracle, Netlify, TinyFish ou clé d'API de modèle.
 
-## Fonctionnement
+> **État réel :** le workflow pilote actuellement une page de conversation **simulée**. Il ne poste pas encore de messages dans ton compte ChatGPT. Les validations portant sur la session authentifiée, le respect des conditions d'utilisation et la fiabilité de la fin de génération restent à faire.
 
-- Un service HTTP protège les routes de commandes avec `SERVICE_TOKEN`.
-- `POST /jobs` reçoit un tableau de prompts, puis les traite strictement dans l'ordre.
-- `GET /jobs/:id` expose état, progression, erreurs et URL, **jamais le texte des réponses**.
-- `POST /jobs/:id/cancel` stoppe les étapes restantes.
-- Un seul navigateur actif ; aucun renvoi automatique d'un prompt après échec ambigu.
-- Modes : `demo` validable localement ; `chatgpt` désactivé par défaut et non validé en production.
+## Déclenchement autonome depuis ChatGPT
 
-## Développement
+Le connecteur GitHub peut créer un fichier dans `requests/` (un commit d'ajout par demande). Cela déclenche automatiquement [le workflow](https://github.com/Vincladef/multi-prompting-playwright/actions/workflows/run-sequence.yml) ; aucun clic GitHub n'est nécessaire.
 
-Node.js 22+ requis.
+Exemple de demande dans ce dépôt public, **réservée aux contenus non confidentiels** :
 
-    npm install
-    npx playwright install chromium
-    npm test
-    SERVICE_TOKEN=une-longue-cle-secrete npm start
+```json
+{
+  "mode": "demo",
+  "prompts": ["Réponds ALPHA", "Réponds BRAVO", "Résume les deux étapes précédentes"]
+}
+```
 
-Test du moteur (sur une page locale fictive) :
+Nom autorisé : `requests/nom-unique.json`. Le workflow détecte automatiquement le fichier ajouté. Chaque exécution utilise une VM Ubuntu propre et une nouvelle instance Chromium.
 
-    curl -X POST http://localhost:3000/jobs -H 'Authorization: Bearer une-longue-cle-secrete' -H 'Content-Type: application/json' -d '{"prompts":["ALPHA","BRAVO","CHARLIE"],"mode":"demo"}'
+**Confidentialité :** les prompts placés dans le dépôt public sont publiquement consultables. Ne jamais y déposer d'informations personnelles, de mots de passe ni de cookies. Ne pas utiliser de pull requests externes pour exécuter des commandes avec des secrets.
 
-La réponse contient un identifiant ; interroger `GET /jobs/<id>`.
+## Déclenchement manuel
 
-## Hébergement Render
+Ouvrir [GitHub Actions → Multi-Prompting → Run workflow](https://github.com/Vincladef/multi-prompting-playwright/actions/workflows/run-sequence.yml), puis entrer un tableau JSON de prompts :
 
-Le `Dockerfile` fournit Chromium avec les bibliothèques nécessaires. Créer un **Web Service Docker** avec `SERVICE_TOKEN` défini dans les variables secrètes Render. Le mode démonstration n'exige aucune connexion à ChatGPT.
+```json
+["ALPHA", "BRAVO", "CHARLIE"]
+```
 
-Le mode `chatgpt` nécessite `ALLOW_LIVE_CHATGPT=true` et un profil Chromium préalablement authentifié (`PROFILE_DIR`). Ce mode est **expérimental et désactivé par défaut**. Ne jamais inscrire de cookie, jeton ou mot de passe dans GitHub. Ne pas contourner de CAPTCHA, de protection de connexion ou de quota. L'analyse des états d'interface n'est pas une preuve formelle de fin de génération ; en cas d'incertitude, interrompre.
+Cliquer sur `Run workflow`. Le rapport `multi-prompting-report` est disponible dans les artefacts de l'exécution, sous `artifacts/run-report.json`, pendant 7 jours.
 
-**Conformité :** les conditions OpenAI interdisent l'extraction automatique ou programmée des sorties. Ce projet ne collecte ni ne transmet le texte des réponses. Vérifier la conformité et les autorisations applicables avant tout usage sur ChatGPT.
+**Limites :** entre 1 et 20 prompts, 10 000 caractères chacun au maximum ; mode `demo` seulement.
 
-**Important :** les jobs sont gardés en mémoire pour ce prototype ; les redémarrages Render les effacent. La file persistante Neon viendra après les tests. Les instances Render gratuites n'ont pas de disque persistant et peuvent s'endormir ; elles ne conviennent pas à une session ChatGPT permanente.
+## Vérifications effectuées par Playwright
 
-## Endpoints
+1. Ouvrir Chromium et une interface simulée.
+2. Envoyer chaque prompt en tant que message utilisateur distinct.
+3. Attendre la réponse simulée, vérifier la fin de génération.
+4. En cas de doute ou d'échec, bloquer sans réessayer ni dupliquer.
+5. Après N messages, vérifier l'ordre exact des N prompts et N réponses.
+6. Écrire un rapport JSON avec le nombre d'étapes confirmées.
 
-- `GET /health` : statut de service, public.
-- `POST /jobs` : `{"prompts":["..."],"mode":"demo"}`, autorisé.
-- `GET /jobs/:id` : lecture d'état, autorisée.
-- `POST /jobs/:id/cancel` : demande d'annulation, autorisée.
+Le workflow de tests unitaires et navigateur se trouve dans `.github/workflows/test.yml`.
 
-Le service ne lance aucune automatisation de ChatGPT à sa création.
+## Développement local
+
+Nécessite Node.js 22+ :
+
+```bash
+npm install
+npx playwright install chromium
+npm test
+INPUT_PROMPTS_JSON='["ALPHA","BRAVO","CHARLIE"]' node src/run-once.mjs
+```
+
+Le service HTTP de prototype `src/server.mjs` et le `Dockerfile` sont laissés dans le dépôt pour des expérimentations locales, mais ne sont **pas utilisés** par GitHub Actions.
+
+## Ce qui manque pour exécuter de vrais prompts ChatGPT
+
+Le runner GitHub Actions est **éphémère**. Il ne possède ni session ChatGPT authentifiée ni profil Chromium persistant. Les cookies et clés privées ne doivent jamais être enregistrés dans le dépôt. Le site peut exiger une authentification interactive et son interface ne fournit aucune garantie immuable concernant la fin des réponses.
+
+La voie officiellement prise en charge pour une exécution multi-tours automatisée est l'API de modèle, qui requiert des identifiants et implique une tarification distincte. Les règles applicables à l'automatisation du site ChatGPT doivent être respectées. Ne pas contourner les protections, les CAPTCHA ou les quotas.
