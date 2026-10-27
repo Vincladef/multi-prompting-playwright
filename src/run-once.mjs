@@ -1,30 +1,42 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { execFileSync } from "node:child_process";
 import { executeSequence } from "./core.mjs";
 import { createBrowserAdapter } from "./browser.mjs";
 
 const reportPath = "artifacts/run-report.json";
 const fail = (reason) => { throw new Error(reason); };
 
-function parseRequest() {
+async function parseRequest() {
   let raw;
   let origin;
   if (process.env.INPUT_PROMPTS_JSON?.trim()) {
     origin = "workflow_dispatch";
     raw = JSON.parse(process.env.INPUT_PROMPTS_JSON);
   } else {
-    // Le contexte GitHub Actions ne garantit pas les listes head_commit.added.
-    // La comparaison Git du commit fait autorité : un fichier de demande par commit.
-    const changed = execFileSync("git", [
-      "diff", "--name-only", "HEAD^", "HEAD", "--", "requests/"
-    ], { encoding: "utf8" });
-    const paths = changed.split(/\r?\n/).filter(path =>
-      /^requests\/[a-zA-Z0-9_.-]+\.json$/.test(path)
+    // GitHub expose le commit directement, même si le runner ne possède pas .git.
+    const repository = process.env.GITHUB_REPOSITORY;
+    const sha = process.env.GITHUB_SHA;
+    if (!/^[-_a-zA-Z0-9.]+\/[-_a-zA-Z0-9.]+$/.test(repository || "") ||
+        !/^[0-9a-f]{40}$/.test(sha || "")) {
+      fail("Métadonnées du commit GitHub indisponibles.");
+    }
+    const response = await fetch(
+      "https://api.github.com/repos/" + repository + "/commits/" + sha,
+      { headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "multi-prompting-runner",
+        ...(process.env.GH_TOKEN ? { authorization: "Bearer " + process.env.GH_TOKEN } : {})
+      } }
     );
+    if (!response.ok) fail("Lecture du commit impossible : HTTP " + response.status);
+    const commit = await response.json();
+    const paths = (commit.files || [])
+      .filter(file => file.status === "added" || file.status === "modified")
+      .map(file => file.filename)
+      .filter(path => /^requests\/[a-zA-Z0-9_.-]+\.json$/.test(path));
     if (paths.length !== 1) fail("Un commit doit contenir exactement une demande JSON dans requests/.");
     origin = paths[0];
-    raw = JSON.parse(awaitRequestFileSync(paths[0]));
+    raw = JSON.parse(await readFile(resolve(process.cwd(), paths[0]), "utf8"));
   }
   const payload = Array.isArray(raw) ? { prompts: raw } : raw;
   if (!payload || !Array.isArray(payload.prompts) ||
@@ -37,10 +49,6 @@ function parseRequest() {
   }
   return { prompts: payload.prompts, origin };
 }
-import { readFileSync } from "node:fs";
-function awaitRequestFileSync(path) {
-  return readFileSync(resolve(process.cwd(), path), "utf8");
-}
 let adapter;
 let report = {
   status: "blocked", mode: "demo", completed: 0, total: 0, steps: [],
@@ -48,7 +56,7 @@ let report = {
   timestamp: new Date().toISOString()
 };
 try {
-  const { prompts, origin } = parseRequest();
+  const { prompts, origin } = await parseRequest();
   report.origin = origin;
   report.total = prompts.length;
   console.log("Séquence demandée : "+prompts.length+" étapes, mode démonstration.");
