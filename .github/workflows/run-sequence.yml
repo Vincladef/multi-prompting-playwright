@@ -1,0 +1,54 @@
+name: Multi-Prompting - Exécuter une séquence
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/*.json"
+  workflow_dispatch:
+    inputs:
+      prompts_json:
+        description: "Tableau JSON de prompts, non confidentiels ; test sur page simulée"
+        required: true
+        type: string
+        default: '["ALPHA","BRAVO","CHARLIE"]'
+permissions:
+  contents: read
+concurrency:
+  group: multi-prompting
+  cancel-in-progress: false
+jobs:
+  sequence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+      - name: Installer Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer les dépendances
+        run: npm install --ignore-scripts --no-audit --no-fund
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - name: Installer Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Vérifier les sources
+        run: |
+          node --check src/core.mjs
+          node --check src/browser.mjs
+          node --check src/run-once.mjs
+      - name: Envoyer les prompts au navigateur simulé
+        env:
+          INPUT_PROMPTS_JSON: ${{ github.event.inputs.prompts_json || '' }}
+          PUSH_ADDED_FILES_JSON: ${{ toJSON(github.event.head_commit.added) }}
+          PUSH_MODIFIED_FILES_JSON: ${{ toJSON(github.event.head_commit.modified) }}
+        run: node src/run-once.mjs
+      - name: Archiver le rapport JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-prompting-report
+          path: artifacts/run-report.json
+          retention-days: 7
+          if-no-files-found: warn
