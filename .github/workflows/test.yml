@@ -14,10 +14,12 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
       - name: Syntax
         run: |
           node --check src/core.mjs
           node --check src/browser.mjs
           node --check src/server.mjs
-      - name: Engine unit tests
+      - name: Engine and browser tests
         run: npm test
