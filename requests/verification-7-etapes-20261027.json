@@ -1,0 +1,12 @@
+{
+  "mode": "demo",
+  "prompts": [
+    "Réponds uniquement ALPHA.",
+    "Réponds uniquement BRAVO.",
+    "Réponds uniquement CHARLIE.",
+    "Réponds uniquement DELTA.",
+    "Réponds uniquement ECHO.",
+    "Réponds uniquement FOXTROT.",
+    "Réponds uniquement FIN."
+  ]
+}
