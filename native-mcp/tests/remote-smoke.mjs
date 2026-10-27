@@ -27,5 +27,10 @@ try {
   console.log("Tool invocation OK (prepares native widget; does not send chat messages)");
   const resources=await req("resources/list");
   console.log("Resource discovery",resources.resources?.map(x=>x.uri));
+  const read=await req("resources/read",{uri:"ui://multi-prompting/sequence.html"});
+  const html=read.contents?.find(x=>x.uri==="ui://multi-prompting/sequence.html")?.text||"";
+  assert.match(html,/<html/i);
+  assert.match(html,/sendFollowUpMessage|ui\/message/);
+  console.log("Widget HTML resource read OK",html.length,"characters");
   console.log("MCP SMOKE PASS; ChatGPT-host dispatch not assessed");
 }catch(e){console.error("MCP SMOKE FAILED:",String(e.stack||e));process.exitCode=1;}finally{clearTimeout(timeout);}
