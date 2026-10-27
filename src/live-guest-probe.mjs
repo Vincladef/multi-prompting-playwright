@@ -34,8 +34,13 @@ try {
   page.setDefaultTimeout(18000);
   console.log("Navigation vers chatgpt.com sans identifiants.");
   await page.goto("https://chatgpt.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
-  await page.waitForTimeout(8000);
+  // Attendre l'hydratation de l'interface sans contourner les protections.
   const composer = page.locator(composerSelector).first();
+  await composer.waitFor({ state: "visible", timeout: 25000 }).catch(() => {});
+  report.pageUrl = page.url().slice(0, 120);
+  report.pageTitle = (await page.title().catch(() => "")).slice(0, 120);
+  report.textFields = await page.locator('textarea, [role="textbox"], [contenteditable="true"]').count();
+  report.signInLinks = await page.getByRole("link", { name: /log in|sign in|connexion|se connecter/i }).count();
   if (!(await composer.isVisible().catch(() => false))) {
     report.status = "blocked";
     report.reason = "Champ de saisie indisponible : authentification, protection, région ou changement d'interface.";
