@@ -19,8 +19,8 @@ function parseRequest() {
     const changed = execFileSync("git", [
       "diff", "--name-only", "HEAD^", "HEAD", "--", "requests/"
     ], { encoding: "utf8" });
-    const paths = changed.split(/\\r?\\n/).filter(path =>
-      /^requests\\/[a-zA-Z0-9_.-]+\\.json$/.test(path)
+    const paths = changed.split(/\r?\n/).filter(path =>
+      /^requests\/[a-zA-Z0-9_.-]+\.json$/.test(path)
     );
     if (paths.length !== 1) fail("Un commit doit contenir exactement une demande JSON dans requests/.");
     origin = paths[0];
