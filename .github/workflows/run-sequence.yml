@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Installer Node 22
         uses: actions/setup-node@v4
         with:
