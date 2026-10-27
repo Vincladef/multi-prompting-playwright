@@ -1,5 +1,6 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 import { executeSequence } from "./core.mjs";
 import { createBrowserAdapter } from "./browser.mjs";
 
@@ -13,10 +14,14 @@ function parseRequest() {
     origin = "workflow_dispatch";
     raw = JSON.parse(process.env.INPUT_PROMPTS_JSON);
   } else {
-    const added = JSON.parse(process.env.PUSH_ADDED_FILES_JSON || "[]");
-    const modified = JSON.parse(process.env.PUSH_MODIFIED_FILES_JSON || "[]");
-    const paths = [...new Set([...(added || []), ...(modified || [])])]
-      .filter(path => /^requests\/[a-zA-Z0-9_.-]+\.json$/.test(path));
+    // Le contexte GitHub Actions ne garantit pas les listes head_commit.added.
+    // La comparaison Git du commit fait autorité : un fichier de demande par commit.
+    const changed = execFileSync("git", [
+      "diff", "--name-only", "HEAD^", "HEAD", "--", "requests/"
+    ], { encoding: "utf8" });
+    const paths = changed.split(/\\r?\\n/).filter(path =>
+      /^requests\\/[a-zA-Z0-9_.-]+\\.json$/.test(path)
+    );
     if (paths.length !== 1) fail("Un commit doit contenir exactement une demande JSON dans requests/.");
     origin = paths[0];
     raw = JSON.parse(awaitRequestFileSync(paths[0]));
