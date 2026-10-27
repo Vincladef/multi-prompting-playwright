@@ -3,101 +3,133 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root{color-scheme:light dark}*{box-sizing:border-box}
-  body{font:14px system-ui,sans-serif;line-height:1.45;margin:0;padding:14px;color:var(--viz-text,#292929)}
-  .panel{border:1px solid #9ca3af66;border-radius:15px;padding:16px;max-width:640px}
-  h2{font-size:16px;margin:0 0 8px} p{margin:8px 0}
-  .muted{color:#707782}.progress{height:6px;background:#aaa5;border-radius:10px;overflow:hidden;margin:14px 0}
-  .progress div{height:100%;background:#1684d5;transition:width .2s}
-  pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:190px;overflow-y:auto;margin:8px 0 14px;font:13px system-ui,sans-serif;padding:12px;background:#9992;border-radius:10px}
-  button{border:0;background:#0874c9;color:white;padding:10px 14px;border-radius:9px;font:inherit;cursor:pointer}
-  button:disabled{opacity:.5;cursor:not-allowed}.caption{font-size:12px}.warning{padding:10px;border-radius:8px;background:#e3aa3b22}
+:root{color-scheme:light dark}*{box-sizing:border-box}
+body{margin:0;padding:12px;font:14px system-ui,sans-serif;line-height:1.45}
+main{border:1px solid #9ca3af70;border-radius:14px;padding:14px;max-width:720px}
+h2{font-size:17px;margin:0 0 6px}
+small,.muted{color:gray}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#8882;padding:12px;border-radius:9px;max-height:220px;overflow:auto;font:13px system-ui,sans-serif}
+progress{width:100%;height:9px}button{border:1px solid #778;border-radius:8px;padding:10px;font:inherit;background:transparent;color:inherit;cursor:pointer}
+button.primary{background:#087bcd;border-color:#087bcd;color:white}button:disabled{opacity:.48;cursor:not-allowed}
+.controls{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+#status{font-weight:600}#warning{border-left:3px solid #d59c19;padding:9px;background:#e4b84c20}
 </style>
 </head>
 <body>
-<div class="panel">
-  <h2>Multi-Prompting · Messages natifs</h2>
-  <p class="muted" id="heading">Chargement de la séquence…</p>
-  <div class="progress"><div id="bar" style="width:0%"></div></div>
-  <pre id="prompt">Le plugin transmet les prompts au panneau.</pre>
-  <button id="send" disabled>Envoyer ce prompt dans le chat</button>
-  <p class="caption warning" id="notice">Après chaque envoi, attends que ChatGPT ait entièrement répondu avant d'appuyer de nouveau. Le SDK ne signale pas encore la fin d'une réponse.</p>
-  <p class="caption muted" id="status" aria-live="polite"></p>
+<main>
+<h2>Multi-Prompting · ChatGPT natif</h2>
+<p class="muted" id="summary">Chargement du composant…</p>
+<progress id="progress" value="0" max="1"></progress>
+<pre id="prompt">Chargement des prompts…</pre>
+<div class="controls">
+  <button class="primary" id="send" disabled>Envoyer le prompt</button>
+  <button id="confirm" hidden>J'ai reçu la réponse complète</button>
+  <button id="stop" disabled>Arrêter la séquence</button>
 </div>
+<p id="status" aria-live="polite"></p>
+<p id="warning"><small>Le ChatGPT actuel n'envoie pas au composant de signal certifiant la fin d'une réponse. L'envoi d'un prompt n'est pas une réponse terminée : confirme la fin avant le suivant. Aucun délai fixe, aucun TinyFish.</small></p>
+</main>
 <script type="module">
-let prompts=[],next=0,busy=false,ready=false;
-const el=id=>document.getElementById(id);
-const button=el("send");
-let rpcId=0;
-const pending=new Map();
-function rpcRequest(method,params){
+let prompts=[],index=0,phase="loading",ready=false,requestId=0;
+const pending=new Map(), $=id=>document.getElementById(id);
+function rpc(method,params){
   return new Promise((resolve,reject)=>{
-    const id=++rpcId;pending.set(id,{resolve,reject});
+    const id=++requestId; pending.set(id,{resolve,reject});
     window.parent.postMessage({jsonrpc:"2.0",id,method,params},"*");
   });
 }
-function notify(method,params){window.parent.postMessage({jsonrpc:"2.0",method,params},"*");}
-function save(){
+function notify(method,params){
+  window.parent.postMessage({jsonrpc:"2.0",method,params},"*");
+}
+function signature(items){return JSON.stringify(items);}
+function persist(){
   if(typeof window.openai?.setWidgetState==="function"){
-    window.openai.setWidgetState({next,total:prompts.length});
+    window.openai.setWidgetState({signature:signature(prompts),index,phase});
   }
 }
-function render(){
-  el("bar").style.width=(prompts.length?(next/prompts.length*100):0)+"%";
-  el("heading").textContent=prompts.length?("Envoyés "+next+" / "+prompts.length):"Séquence indisponible";
-  el("prompt").textContent=next<prompts.length?prompts[next]:"Tous les prompts ont été envoyés.";
-  button.disabled=!ready||!prompts.length||next>=prompts.length||busy;
-  button.textContent=next===0?"Envoyer le premier prompt":next<prompts.length?"Envoyer le prompt "+(next+1):"Séquence envoyée";
+function view(){
+  const count=prompts.length;
+  $("progress").max=count||1;$("progress").value=index;
+  $("summary").textContent=count?("Étape "+Math.min(index+1,count)+" / "+count+" · "+index+" réponses confirmées"):"Aucune séquence chargée";
+  $("prompt").textContent=index<count?prompts[index]:"Tous les prompts traités.";
+  $("send").disabled=!(ready&&index<count&&phase==="ready");
+  $("confirm").hidden=phase!=="awaiting-response";
+  $("confirm").disabled=phase!=="awaiting-response";
+  $("stop").disabled=!(ready&&phase!=="stopped"&&phase!=="done"&&count);
+  const labels={
+    loading:"Connexion au composant…",
+    ready:"Prêt : le prochain prompt peut être envoyé.",
+    sending:"Envoi en cours : ne pas réessayer.",
+    "awaiting-response":"Prompt envoyé et accepté par l'hôte. Attendre la réponse complète avant de confirmer.",
+    uncertain:"Statut ambigu : vérifier le chat. Aucun renvoi automatique.",
+    stopped:"Séquence arrêtée. Aucun autre envoi.",
+    done:"Séquence terminée, après confirmation des réponses."
+  };
+  $("status").textContent=labels[phase]||"";
 }
-function load(args){
-  const incoming=args?.prompts;
-  if(!Array.isArray(incoming)||!incoming.length||incoming.some(p=>typeof p!=="string"))return;
-  if(JSON.stringify(prompts)===JSON.stringify(incoming))return;
-  prompts=incoming;
-  const old=window.openai?.widgetState;
-  next=old?.total===prompts.length&&Number.isInteger(old.next)?Math.min(Math.max(0,old.next),prompts.length):0;
-  render();
+function load(data){
+  const incoming=data?.prompts;
+  if(!Array.isArray(incoming)||incoming.length<1||incoming.length>50||
+      incoming.some(p=>typeof p!=="string"||!p.trim()||p.length>12000))return;
+  if(signature(prompts)===signature(incoming))return;
+  prompts=[...incoming];
+  const saved=window.openai?.widgetState;
+  if(saved?.signature===signature(prompts)&&Number.isInteger(saved?.index)){
+    index=Math.min(Math.max(0,saved.index),prompts.length);
+    phase=["ready","sending","awaiting-response","uncertain","stopped","done"].includes(saved.phase)?saved.phase:"uncertain";
+    if(phase==="sending")phase="uncertain";
+  }else{index=0;phase="ready";}
+  persist();view();
 }
-window.addEventListener("message",(event)=>{
+window.addEventListener("message",event=>{
   if(event.source!==window.parent)return;
-  const message=event.data;
-  if(!message||message.jsonrpc!=="2.0")return;
-  if(typeof message.id==="number"){
-    const value=pending.get(message.id);
-    if(!value)return;
-    pending.delete(message.id);
-    if(message.error)value.reject(message.error);else value.resolve(message.result);
+  const msg=event.data;
+  if(!msg||msg.jsonrpc!=="2.0")return;
+  if(typeof msg.id==="number"&&pending.has(msg.id)){
+    const task=pending.get(msg.id);pending.delete(msg.id);
+    if(msg.error)task.reject(new Error(msg.error.message||"RPC error"));
+    else task.resolve(msg.result);
   }
-  if(message.method==="ui/notifications/tool-input")load(message.params?.arguments);
-  if(message.method==="ui/notifications/tool-result")load(message.params?.structuredContent||message.params?.result?.structuredContent);
+  if(msg.method==="ui/notifications/tool-input")load(msg.params?.arguments);
+  if(msg.method==="ui/notifications/tool-result")load(msg.params?.structuredContent);
+  if(msg.method==="ui/resource-teardown"&&typeof msg.id==="number"){
+    window.parent.postMessage({jsonrpc:"2.0",id:msg.id,result:{}},"*");
+  }
 });
-button.addEventListener("click",async()=>{
-  if(!ready||busy||next>=prompts.length)return;
-  busy=true;render();
+$("send").addEventListener("click",async()=>{
+  if(!ready||phase!=="ready"||index>=prompts.length)return;
+  phase="sending";persist();view();
   try{
-    // Envoi réel dans la conversation ACTIVE, pas une discussion API.
+    let result;
     if(typeof window.openai?.sendFollowUpMessage==="function"){
-      await window.openai.sendFollowUpMessage({prompt:prompts[next]});
+      result=await window.openai.sendFollowUpMessage({prompt:prompts[index]});
     }else{
-      await rpcRequest("ui/message",{role:"user",content:[{type:"text",text:prompts[next]}]});
+      result=await rpc("ui/message",{role:"user",content:[{type:"text",text:prompts[index]}]});
     }
-    next++;
-    save();
-    el("status").textContent="Message "+next+" envoyé ; attendre la réponse avant de continuer.";
-  }catch(err){
-    el("status").textContent="Envoi non confirmé. Ne pas réessayer avant vérification du chat.";
-    button.disabled=true;
-  }finally{busy=false;render();}
+    if(result?.isError)throw new Error("Hôte a refusé l'envoi");
+    // L'ACK ne dit rien sur le début ou la fin de la réponse de ChatGPT.
+    phase="awaiting-response";
+  }catch(error){phase="uncertain";}
+  persist();view();
+});
+$("confirm").addEventListener("click",()=>{
+  if(phase!=="awaiting-response")return;
+  index++;
+  phase=index===prompts.length?"done":"ready";
+  persist();view();
+});
+$("stop").addEventListener("click",()=>{
+  if(phase==="done"||phase==="stopped"||!ready)return;
+  phase="stopped";persist();view();
 });
 (async()=>{
   try{
-    await rpcRequest("ui/initialize",{appInfo:{name:"multi-prompting-native",version:"0.1.0"},appCapabilities:{},protocolVersion:"2026-01-26"});
+    await rpc("ui/initialize",{appInfo:{name:"multi-prompting-native",version:"0.2.0"},appCapabilities:{},protocolVersion:"2026-01-26"});
     notify("ui/notifications/initialized",{});
     ready=true;
     load(window.openai?.toolOutput);
     load(window.openai?.toolInput);
-    render();
-  }catch(err){el("status").textContent="Connexion au composant ChatGPT indisponible.";}
+    view();
+  }catch(error){phase="uncertain";$("status").textContent="Initialisation MCP refusée ou indisponible.";view();}
 })();
 </script>
 </body>
