@@ -84,6 +84,21 @@ export async function createBrowserAdapter(mode) {
         throw new Error("Génération encore active ; arrêt sans réémission.");
       }
     },
+    async auditDemo(prompts) {
+      if (mode !== "demo") throw new Error("Audit réservé au mode démonstration.");
+      const users = await page.locator(userSelector).allTextContents();
+      const assistants = await page.locator(replySelector).allTextContents();
+      if (users.length !== prompts.length || assistants.length !== prompts.length) {
+        return { valid: false, reason: "Nombre de messages inattendu", userMessages: users.length, assistantMessages: assistants.length };
+      }
+      const valid = prompts.every((prompt, i) => users[i] === prompt && assistants[i] === "Réponse simulée " + prompt);
+      return {
+        valid,
+        reason: valid ? null : "Ordre ou contenu de la conversation simulée incorrect",
+        userMessages: users.length,
+        assistantMessages: assistants.length
+      };
+    },
     url: async () => mode === "demo" ? "demo://local-fixture" : page.url(),
     async close() {
       await context.close();
