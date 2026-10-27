@@ -27,8 +27,10 @@ try {
   console.log("Tool invocation OK (prepares native widget; does not send chat messages)");
   const resources=await req("resources/list");
   console.log("Resource discovery",resources.resources?.map(x=>x.uri));
-  const read=await req("resources/read",{uri:"ui://multi-prompting/sequence.html"});
-  const html=read.contents?.find(x=>x.uri==="ui://multi-prompting/sequence.html")?.text||"";
+  const uri=resources.resources?.find(x=>x.uri?.startsWith("ui://multi-prompting/sequence"))?.uri;
+  assert.ok(uri,"sequence UI missing");
+  const read=await req("resources/read",{uri});
+  const html=read.contents?.find(x=>x.uri===uri)?.text||"";
   assert.match(html,/<html/i);
   assert.match(html,/sendFollowUpMessage|ui\/message/);
   console.log("Widget HTML resource read OK",html.length,"characters");
