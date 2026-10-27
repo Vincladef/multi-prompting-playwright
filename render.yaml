@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: multi-prompting-playwright
+    runtime: docker
+    plan: free
+    region: frankfurt
+    repo: https://github.com/Vincladef/multi-prompting-playwright
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SERVICE_TOKEN
+        sync: false
+      - key: ALLOW_LIVE_CHATGPT
+        value: "false"
