@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Multi-Prompting déterministe",
+  "version": "1.0.0",
+  "description": "Envoie des prompts successifs dans l'onglet ChatGPT actif et attend la fin observable de chaque réponse. Aucun agent ni accès réseau tiers.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
