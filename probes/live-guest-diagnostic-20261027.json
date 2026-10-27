@@ -1,0 +1,6 @@
+{
+  "scope": "chatgpt.com guest session",
+  "prompts": 3,
+  "diagnostics": "UI readiness only",
+  "readOutputs": false
+}
