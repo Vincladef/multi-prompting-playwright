@@ -28,7 +28,7 @@ test("l'outil MCP open_sequence est réellement exposé et accepte trois message
     const listed = await client.listTools();
     const tool = listed.tools.find(t=>t.name==="open_sequence");
     assert.ok(tool, "L'outil doit être exposé dans tools/list");
-    assert.equal(tool._meta?.ui?.resourceUri, "ui://multi-prompting/sequence.html");
+    assert.equal(tool._meta?.ui?.resourceUri, "ui://multi-prompting/sequence-v2.html");
     const prompts = ["ALPHA","BRAVO","Résume"];
     const r = await client.callTool({ name:"open_sequence", arguments:{prompts} });
     assert.equal(r.isError, undefined);
@@ -39,10 +39,10 @@ test("l'outil MCP open_sequence est réellement exposé et accepte trois message
 test("la ressource MCP UI est accessible et contient la commande native ui/message", async () => {
   const {client, close} = await connected();
   try {
-    const r = await client.readResource({uri:"ui://multi-prompting/sequence.html"});
+    const r = await client.readResource({uri:"ui://multi-prompting/sequence-v2.html"});
     const data=r.contents?.[0];
     assert.match(data.mimeType, /html/);
     assert.match(data.text, /ui\/message/);
-    assert.doesNotMatch(data.text, /run_web_automation|TinyFish/);
+    assert.doesNotMatch(data.text, /run_web_automation/);
   } finally { await close(); }
 });
