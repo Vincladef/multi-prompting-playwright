@@ -1,0 +1,24 @@
+name: Construire l'extension déterministe
+on:
+  push:
+    paths:
+      - 'browser-extension/**'
+      - '.github/workflows/package-extension.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vérifier la syntaxe
+        run: node --check browser-extension/content.js
+      - name: Créer l'extension
+        run: zip -j multi-prompting-extension.zip browser-extension/manifest.json browser-extension/content.js browser-extension/README.md
+      - name: Livrer l'archive ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-prompting-extension
+          path: multi-prompting-extension.zip
+          retention-days: 30
