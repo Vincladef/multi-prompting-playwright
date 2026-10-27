@@ -1,12 +1,12 @@
 {
   "mode": "demo",
   "prompts": [
-    "ALPHA",
-    "BRAVO",
-    "CHARLIE",
-    "DELTA",
-    "ECHO",
-    "FOXTROT",
-    "FIN"
+    "TEST 1 ALPHA",
+    "TEST 2 BRAVO",
+    "TEST 3 CHARLIE",
+    "TEST 4 DELTA",
+    "TEST 5 ECHO",
+    "TEST 6 FOXTROT",
+    "TEST 7 FIN"
   ]
 }
