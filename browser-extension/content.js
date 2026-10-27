@@ -27,7 +27,7 @@
   const panel = document.createElement("aside");
   panel.id = "mp-deterministe";
   panel.setAttribute("aria-label","Multi-Prompting déterministe");
-  panel.style.cssText="all:initial;position:fixed;right:14px;bottom:18px;z-index:2147483647;width:min(385px,calc(100vw - 28px));box-shadow:0 8px 30px #0005;border:1px solid #8888;border-radius:14px;background:#20252c;color:#fff;font:13px system-ui,sans-serif;padding:14px;display:flex;flex-direction:column;gap:8px";
+  panel.style.cssText="all:initial;position:fixed;right:14px;bottom:18px;z-index:2147483647;width:min(385px,calc(100vw - 28px));box-shadow:0 8px 30px #0005;border:1px solid #8888;border-radius:14px;background:#20252c;color:#fff;font:13px system-ui,sans-serif;padding:14px;display:flex;flex-direction:column;gap:8px;max-height:72dvh;overflow-y:auto;touch-action:pan-y";
   panel.innerHTML = '<b style="font-size:16px">Multi-Prompting déterministe</b>'
     + '<small>1 prompt = 1 message ChatGPT. Aucun agent ni API de modèle.</small>'
     + '<textarea id="mp-sequence" style="height:120px;resize:vertical;padding:8px;border-radius:8px;background:#111;color:#fff;border:1px solid #888" placeholder="Prompt 1\n--- PROMPT ---\nPrompt 2"></textarea>'
@@ -38,7 +38,22 @@
 
   const area=panel.querySelector("#mp-sequence"), status=panel.querySelector("#mp-status");
   const start=panel.querySelector("#mp-start"), cancel=panel.querySelector("#mp-cancel");
-  let job=null, running=false, abort=null, busy=false;
+  let abort=null, busy=false, wakeLock=null;
+  async function keepScreenAwake(){
+    try {
+      if("wakeLock" in navigator && !document.hidden) wakeLock=await navigator.wakeLock.request("screen");
+    }catch(error){say("Écran non maintenu éveillé : laisse le téléphone actif. "+String(error.message||""));}
+  }
+  async function releaseScreen(){
+    try {await wakeLock?.release();}catch{}
+    wakeLock=null;
+  }
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden && busy){
+      abort?.abort();
+      say("Séquence interrompue : l'onglet n'est plus au premier plan. Vérifie le dernier message avant un nouvel essai.");
+    }
+  });
 
   function say(message) { status.textContent = message; }
   function readPrompts() {
@@ -133,9 +148,10 @@
     if(!visible(composer())){say("Ouvre d'abord une discussion ChatGPT connectée.");return;}
     const controller=new AbortController();abort=controller;busy=true;
     start.disabled=true;cancel.disabled=false;area.disabled=true;
+    await keepScreenAwake();
     try{await run(prompts,controller.signal);}
     catch(e){say("ARRÊT : "+e.message+" Vérifie les derniers messages avant tout nouvel essai.");}
-    finally{busy=false;cancel.disabled=true;start.disabled=false;area.disabled=false;abort=null;}
+    finally{await releaseScreen();busy=false;cancel.disabled=true;start.disabled=false;area.disabled=false;abort=null;}
   });
   cancel.addEventListener("click",()=>abort?.abort());
   panel.querySelector("#mp-hide").addEventListener("click",()=>{panel.style.display="none";
