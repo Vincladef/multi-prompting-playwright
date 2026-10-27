@@ -1,0 +1,29 @@
+name: Vérifier le serveur MCP natif
+on:
+  push:
+    paths:
+      - "native-mcp/**"
+      - ".github/workflows/test-native-mcp.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: native-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Installer les dépendances MCP
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Vérifier le serveur
+        run: node --check server.mjs
+      - name: Tester MCP tools/list, tools/call et resources/read
+        env:
+          NODE_ENV: test
+        run: npm test
