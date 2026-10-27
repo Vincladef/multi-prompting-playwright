@@ -1,0 +1,32 @@
+name: Live ChatGPT guest probe
+on:
+  push:
+    branches: [main]
+    paths:
+      - "probes/live-guest-*.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: live-chatgpt-guest-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer les dépendances
+        run: npm install --ignore-scripts --no-audit --no-fund
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - name: Test du vrai site, sans extraction des réponses
+        run: node src/live-guest-probe.mjs
+      - name: Archiver le compte rendu de la sonde
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-chatgpt-guest-probe-report
+          path: artifacts/live-guest-probe.json
+          retention-days: 7
