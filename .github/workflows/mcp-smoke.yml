@@ -1,0 +1,19 @@
+name: MCP native protocol smoke test
+on:
+  push:
+    branches: [main]
+    paths: ["native-mcp/tests/remote-smoke.mjs"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify deployed MCP protocol (no credentials or ChatGPT messages)
+        run: node native-mcp/tests/remote-smoke.mjs
