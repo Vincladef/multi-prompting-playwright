@@ -1,0 +1,12 @@
+{
+  "mode": "demo",
+  "prompts": [
+    "ALPHA",
+    "BRAVO",
+    "CHARLIE",
+    "DELTA",
+    "ECHO",
+    "FOXTROT",
+    "FIN"
+  ]
+}
