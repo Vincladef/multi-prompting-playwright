@@ -62,3 +62,11 @@ Le service HTTP de prototype `src/server.mjs` et le `Dockerfile` sont laissés d
 Le runner GitHub Actions est **éphémère**. Il ne possède ni session ChatGPT authentifiée ni profil Chromium persistant. Les cookies et clés privées ne doivent jamais être enregistrés dans le dépôt. Le site peut exiger une authentification interactive et son interface ne fournit aucune garantie immuable concernant la fin des réponses.
 
 La voie officiellement prise en charge pour une exécution multi-tours automatisée est l'API de modèle, qui requiert des identifiants et implique une tarification distincte. Les règles applicables à l'automatisation du site ChatGPT doivent être respectées. Ne pas contourner les protections, les CAPTCHA ou les quotas.
+
+## Tests réels du 27 octobre 2026
+
+- Démonstration de **7 prompts et 7 réponses** : réussite sur interface locale simulée, [exécution GitHub](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40428076561).
+- Première sonde sur le site réel `chatgpt.com`, sans compte : **0/3** messages, composeur absent, [exécution GitHub](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40429279803).
+- Seconde sonde, après attente allongée : **0/3** ; la page renvoie le titre **« Just a moment... »**, sans champ de saisie. Cela indique une protection ou vérification d'accès que le moteur ne doit pas contourner, [exécution GitHub](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40429908722).
+
+**La limite actuelle est le vrai site ChatGPT, pas la durée de GitHub Actions.** Le workflow séquentiel admet désormais 180 minutes par job et le moteur permet jusqu'à 45 minutes par réponse par défaut. Une session ChatGPT authentifiée n'est pas disponible dans les runners GitHub éphémères ; aucune donnée d'authentification n'est stockée.
