@@ -15,10 +15,10 @@ jobs:
       - name: Vérifier la syntaxe
         run: node --check browser-extension/content.js
       - name: Créer l'extension
-        run: zip -j multi-prompting-extension.zip browser-extension/manifest.json browser-extension/content.js browser-extension/README.md
+        run: zip -j multi-prompting-android.zip browser-extension/manifest.json browser-extension/content.js browser-extension/README-ANDROID.md
       - name: Livrer l'archive ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: multi-prompting-extension
-          path: multi-prompting-extension.zip
+          name: multi-prompting-android
+          path: multi-prompting-android.zip
           retention-days: 30
