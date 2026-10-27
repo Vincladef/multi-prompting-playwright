@@ -5,6 +5,7 @@ const replySelector = '[data-message-author-role="assistant"]';
 const userSelector = '[data-message-author-role="user"]';
 const composerSelector = '#prompt-textarea[contenteditable="true"], [data-testid="composer-input"][contenteditable="true"]';
 const stopSelector = '[data-testid="stop-button"], [data-testid="composer-stop-button"]';
+const responseTimeoutMs = Math.max(180000, Math.min(Number(process.env.RESPONSE_TIMEOUT_MS || 2700000), 3600000));
 
 function fixtureHtml() {
   return '<!DOCTYPE html><html><body><main id="conversation"></main>' +
@@ -68,13 +69,13 @@ export async function createBrowserAdapter(mode) {
       await page.waitForFunction(
         (expected) => document.querySelectorAll('[data-message-author-role="assistant"]').length >= expected,
         assistantBefore + 1,
-        { timeout: 180000 }
+        { timeout: responseTimeoutMs }
       );
       // Only checks DOM completion signals; intentionally never reads or extracts response text.
       await page.waitForFunction(() => {
         const stopButtons = [...document.querySelectorAll('[data-testid="stop-button"],[data-testid="composer-stop-button"]')];
         return stopButtons.every((element) => element.hidden || getComputedStyle(element).display === "none");
-      }, null, { timeout: 180000 });
+      }, null, { timeout: responseTimeoutMs });
       await page.waitForTimeout(900);
       if (signal?.aborted) throw new Error("Cancelled");
       if (await page.locator(replySelector).count() !== assistantBefore + 1) {
