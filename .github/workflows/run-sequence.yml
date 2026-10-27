@@ -38,6 +38,7 @@ jobs:
       - name: Envoyer les prompts au navigateur simulé
         env:
           INPUT_PROMPTS_JSON: ${{ github.event.inputs.prompts_json || '' }}
+          GH_TOKEN: ${{ github.token }}
         run: node src/run-once.mjs
       - name: Archiver le rapport JSON
         if: always()
