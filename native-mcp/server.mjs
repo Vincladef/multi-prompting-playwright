@@ -9,7 +9,7 @@ import { z } from "zod";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const widgetHtml = readFileSync(join(__dirname, "widget.html"), "utf8");
-const URI = "ui://multi-prompting/sequence.html";
+const URI = "ui://multi-prompting/sequence-v2.html";
 
 export function validatePrompts(prompts) {
   if (!Array.isArray(prompts) || prompts.length < 1 || prompts.length > 50 ||
@@ -20,13 +20,13 @@ export function validatePrompts(prompts) {
 }
 
 export function createMultiPromptServer() {
-  const server = new McpServer({name:"multi-prompting-native",version:"0.1.0"});
+  const server = new McpServer({name:"multi-prompting-native",version:"0.2.0"});
   registerAppResource(server,"multi-prompting-widget",URI,{},async()=>({
     contents:[{uri:URI,mimeType:RESOURCE_MIME_TYPE,text:widgetHtml}]
   }));
   registerAppTool(server,"open_sequence",{
     title:"Ouvrir une séquence Multi-Prompting native",
-    description:"Prépare dans la conversation ChatGPT actuelle un panneau permettant d'envoyer un par un de vrais messages utilisateur, après chaque réponse. Ne simule pas les messages ; le composant utilise ui/message et exige un clic par étape faute de signal de fin de réponse.",
+    description:"Prépare dans la conversation ChatGPT actuelle une séquence de vrais messages natifs, sans simulation. Le composant exige une confirmation explicite de la fin de chaque réponse faute de notification hôte de fin de génération.",
     inputSchema:{prompts:z.array(z.string().min(1).max(12000)).min(1).max(50)},
     outputSchema:{prompts:z.array(z.string())},
     _meta:{ui:{resourceUri:URI}}
@@ -34,7 +34,7 @@ export function createMultiPromptServer() {
     try {
       validatePrompts(prompts);
       return {
-        content:[{type:"text",text:"Séquence prête. Utilise le panneau pour envoyer le premier prompt, puis attends sa réponse avant d'envoyer le suivant. Le panneau ne garantit pas l'exécution autonome de tous les tours."}],
+        content:[{type:"text",text:"Séquence prête. Le panneau permet d'envoyer un tour utilisateur natif à la fois. L'hôte n'expose pas de signal fiable de fin de réponse ; une confirmation est requise pour l'étape suivante."}],
         structuredContent:{prompts}
       };
     }catch(err){
