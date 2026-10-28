@@ -5,6 +5,7 @@ on:
     paths:
       - "requests/*.json"
       - "!requests/chain-*.json"
+      - "!requests/kernel-*.json"
   workflow_dispatch:
     inputs:
       prompts_json:
