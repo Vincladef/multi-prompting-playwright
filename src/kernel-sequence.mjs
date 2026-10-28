@@ -2,176 +2,179 @@ import Kernel from "@onkernel/sdk";
 import { chromium } from "playwright";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { inspectChatDom, installChatObserver } from "./kernel-dom.mjs";
 
-// Deterministic, text-free DOM observation: never extracts ChatGPT output,
-// logs prompts, captures screenshots, or emits signed Kernel URLs.
-const MAX_PROMPTS = 20;
-const REPLY_TIMEOUT = Math.max(180000, Math.min(Number(process.env.REPLY_TIMEOUT_MS || 900000), 2700000));
-const ASSISTANT = '[data-message-author-role="assistant"]';
-const USER = '[data-message-author-role="user"]';
-const COMPOSER = '#prompt-textarea, [data-testid="composer-input"], [role="textbox"][contenteditable="true"], [contenteditable="true"], [role="textbox"], textarea[placeholder]';
-const STOP = '[data-testid="stop-button"], [data-testid="composer-stop-button"]';
-const SEND = 'button[aria-label="Send"], [data-testid="send-button"], [data-testid*="send"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[aria-label="Envoyer"], button[aria-label="Envoyer le message"], button[type="submit"]';
+// No message text extraction, screenshots, cookies, signed URLs or private thread URLs.
+// Only generic DOM actions of the currently authenticated ChatGPT interface.
+const USER_CONFIRM_MS = 45000;
+const RESPONSE_TIMEOUT_MS = Math.max(180000, Math.min(Number(process.env.REPLY_TIMEOUT_MS || 900000), 2700000));
+const POLL_MS = 350;
+const QUIET_MS = 2100;
+const EDITOR = 'main [role="textbox"][contenteditable="true"]';
+const SEND = 'main button[aria-label="Send"]';
 
-const report = { kind: "kernel-sequence", mode: "live", status: "initializing", phase: "initialization",
-  prompts_total: 0, prompts_submitted: 0, responses_confirmed: 0,
-  profile: "multi-prompting", cleanup: "not_needed" };
-let session;
-let browser;
-let kernel;
-let page;
+const report = {
+  kind: "kernel-sequence-v2",
+  status: "initializing",
+  phase: "initialization",
+  prompts_total: 0,
+  send_attempts: 0,
+  prompts_submitted: 0,
+  responses_confirmed: 0,
+  profile: "multi-prompting",
+  cleanup: "not_needed",
+  steps: []
+};
+let kernel, session, browser, page;
+let threadPath = null;
 
-function stopVisible() {
-  return Array.from(document.querySelectorAll(
-    '[data-testid="stop-button"], [data-testid="composer-stop-button"]'
-  )).some(el => !el.hidden && getComputedStyle(el).display !== "none" &&
-    getComputedStyle(el).visibility !== "hidden");
-}
-
-async function reportFile() {
-  await mkdir("artifacts", { recursive: true });
-  await writeFile("artifacts/kernel-sequence.json", JSON.stringify(report, null, 2) + "\n");
-}
-async function assertReady() {
-  const title = await page.title();
-  if (/just a moment|attention required|verification/i.test(title))
-    throw new Error("security_challenge");
-  // The SPA can replace the editor between renders: wait for a usable editor.
-  try { await page.locator(COMPOSER).first().waitFor({ state: "visible", timeout: 20000 }); }
-  catch { throw new Error("composer_missing"); }
-}
-async function sendOne(prompt) {
-  report.phase = "locating_composer";
-  await assertReady();
-  const usersBefore = await page.locator(USER).count();
-  const assistantsBefore = await page.locator(ASSISTANT).count();
-  if (await page.evaluate(stopVisible)) throw new Error("previous_generation_active");
-  const composer = page.locator(COMPOSER).first();
-  report.phase = "filling_composer";
-  await composer.fill(prompt);
-  report.phase = "finding_send";
-  const button = page.locator(SEND).filter({ visible: true }).first();
-  // A single explicit click, or a single Enter key as a conservative fallback.
-  // Either action might submit. Never retry after either action.
-  if (await button.count() > 0) {
-    if (!(await button.isEnabled())) throw new Error("send_button_disabled");
-    await button.click();
-    report.phase = "clicked_send";
-  } else {
-    report.phase = "pressed_enter";
-    await composer.press("Enter");
+function fail(code) { throw new Error(code); }
+async function waitForState(stage, predicate, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    let state;
+    try {
+      state = await page.evaluate(inspectChatDom);
+    } catch {
+      await page.waitForTimeout(POLL_MS);
+      continue;
+    }
+    if (state.userActions > report.prompts_submitted + 1)
+      fail("unexpected_user_turns");
+    if (predicate(state)) return state;
+    await page.waitForTimeout(POLL_MS);
   }
-  // From this point, sending may have occurred: NEVER auto-retry.
-  report.prompts_submitted += 1;
-  report.phase = "checking_user_message";
-  await page.waitForFunction(expected => document.querySelectorAll(
-    '[data-message-author-role="user"]').length >= expected,
-    usersBefore + 1, { timeout: 30000 });
-  if (await page.locator(USER).count() !== usersBefore + 1)
-    throw new Error("ambiguous_user_message_count");
-  report.phase = "checking_assistant_message";
-  await page.waitForFunction(expected => document.querySelectorAll(
-    '[data-message-author-role="assistant"]').length >= expected,
-    assistantsBefore + 1, { timeout: REPLY_TIMEOUT });
-  report.phase = "checking_completion";
-  await page.waitForFunction(() => {
-    const els = Array.from(document.querySelectorAll(
-      '[data-testid="stop-button"], [data-testid="composer-stop-button"]'));
-    return els.every(el => el.hidden || getComputedStyle(el).display === "none" ||
-      getComputedStyle(el).visibility === "hidden");
-  }, null, { timeout: REPLY_TIMEOUT });
-  // Stable completion window; no response text is read.
-  await page.waitForTimeout(2300);
-  if (await page.evaluate(stopVisible)) throw new Error("generation_resumed");
-  if (await page.locator(ASSISTANT).count() !== assistantsBefore + 1)
-    throw new Error("ambiguous_assistant_message_count");
-  report.responses_confirmed += 1;
-  report.phase = "response_confirmed";
+  fail("timeout_" + stage);
 }
+async function ensureReady() {
+  if (/just a moment|attention required|verification/i.test(await page.title())) fail("security_challenge");
+  try {
+    await page.locator(EDITOR).first().waitFor({ state: "visible", timeout: 25000 });
+  } catch { fail("composer_missing"); }
+  const current = await page.evaluate(inspectChatDom);
+  if (current.stop) fail("generation_already_active");
+  if (!current.hasEditor) fail("composer_missing");
+  return current;
+}
+async function sendAndConfirm(prompt, index) {
+  report.phase = "ready_" + (index + 1);
+  const before = await ensureReady();
+  if (index > 0 && (!before.inConversation || !threadPath ||
+      new URL(page.url()).pathname !== threadPath)) fail("wrong_conversation");
+  if (before.userActions !== index || before.assistantCompleted !== index)
+    fail("unexpected_turn_counts");
+
+  report.phase = "filling_" + (index + 1);
+  const editor = page.locator(EDITOR).first();
+  await editor.fill(prompt);
+  const send = page.locator(SEND).first();
+  try {
+    await send.waitFor({ state: "visible", timeout: 20000 });
+  } catch { fail("send_button_missing"); }
+  if (!(await send.isEnabled())) fail("send_disabled");
+
+  // Record intention BEFORE clicking: if navigation interrupts click,
+  // we cannot prove whether the message was submitted. Never replay it.
+  report.phase = "sending_" + (index + 1);
+  report.send_attempts += 1;
+  await send.click();
+
+  report.phase = "user_confirmation_" + (index + 1);
+  await waitForState("user", state =>
+    state.inConversation && state.userActions === before.userActions + 1,
+    USER_CONFIRM_MS);
+  if (index === 0) threadPath = new URL(page.url()).pathname;
+  if (new URL(page.url()).pathname !== threadPath) fail("conversation_changed");
+  report.prompts_submitted += 1;
+  report.steps.push({number:index + 1, state:"user_confirmed"});
+
+  report.phase = "reply_confirmation_" + (index + 1);
+  const after = await waitForState("assistant", state =>
+    state.userActions === before.userActions + 1 &&
+    state.assistantCompleted === before.assistantCompleted + 1 &&
+    state.assistantCopies === before.assistantCopies + 1 &&
+    state.assistantRegenerates === before.assistantRegenerates + 1 &&
+    state.assistantRates === before.assistantRates + 1 &&
+    !state.stop && state.hasEditor &&
+    state.mutationQuietMs !== null && state.mutationQuietMs >= QUIET_MS,
+    RESPONSE_TIMEOUT_MS);
+
+  // Final idempotence guard: the conversation is the same and the counters
+  // still refer to exactly one new user message and one finished assistant.
+  if (new URL(page.url()).pathname !== threadPath ||
+    after.userActions !== index + 1 || after.assistantCompleted !== index + 1)
+    fail("ambiguous_completion");
+
+  report.responses_confirmed += 1;
+  report.steps[index] = {number:index + 1, state:"response_confirmed"};
+  report.phase = "reply_confirmed_" + (index + 1);
+}
+
 try {
-  if (!process.env.KERNEL_API_KEY) throw new Error("missing_kernel_secret");
+  if (!process.env.KERNEL_API_KEY) fail("missing_kernel_secret");
   const path = process.env.SEQUENCE_REQUEST || "";
   if (!/^requests\/kernel-[a-zA-Z0-9_-]{1,70}\.json$/.test(path) ||
-      basename(path).includes("..")) throw new Error("invalid_request_path");
-  const data = JSON.parse(await readFile(path, "utf8"));
-  if (data.mode !== "live" || !Array.isArray(data.prompts) ||
-      data.prompts.length < 1 || data.prompts.length > MAX_PROMPTS ||
-      !data.prompts.every(p => typeof p === "string" && p.trim() &&
-        p.length <= 10000))
-    throw new Error("invalid_prompt_request");
-  if (data.target !== undefined && data.target !== "new")
-    throw new Error("unsupported_target"); // Only a fresh conversation. Do not expose private thread IDs.
-  report.prompts_total = data.prompts.length;
+      basename(path).includes("..")) fail("invalid_request_path");
+  const input = JSON.parse(await readFile(path, "utf8"));
+  if (input.mode !== "live" || (input.target && input.target !== "new") ||
+      !Array.isArray(input.prompts) || input.prompts.length < 1 ||
+      input.prompts.length > 20 ||
+      !input.prompts.every(s => typeof s === "string" && !!s.trim() && s.length <= 10000))
+    fail("invalid_request");
+  report.prompts_total = input.prompts.length;
+
   kernel = new Kernel({ apiKey: process.env.KERNEL_API_KEY });
   session = await kernel.browsers.create({
     name: "multi-prompting-sequence",
-    headless: true,
-    stealth: false,
-    timeout_seconds: 10800,
+    headless: true, stealth: false, timeout_seconds: 10800,
     start_url: "https://chatgpt.com/",
     profile: { name: "multi-prompting", save_changes: true }
   });
-  report.status = "browser_created";
-  report.phase = "cdp";
+  report.phase = "connecting_cdp";
   browser = await chromium.connectOverCDP(session.cdp_ws_url, { timeout: 45000 });
-  report.phase = "context";
   const context = browser.contexts()[0];
-  if (!context) throw new Error("no_context");
+  if (!context) fail("missing_context");
   page = context.pages()[0] || await context.newPage();
-  report.phase = "navigation";
+  report.phase = "opening_chatgpt";
   await page.goto("https://chatgpt.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
-  report.phase = "composer";
-  await page.locator(COMPOSER).first().waitFor({ state: "visible", timeout: 30000 });
-  report.phase = "sending";
-  for (const prompt of data.prompts) await sendOne(prompt);
+  await ensureReady();
+  await page.evaluate(installChatObserver);
+  const baseline = await page.evaluate(inspectChatDom);
+  if (baseline.userActions || baseline.assistantCompleted)
+    fail("not_new_conversation");
+  report.status = "running";
+
+  for (let i = 0; i < input.prompts.length; i++) {
+    await sendAndConfirm(input.prompts[i], i);
+  }
   report.status = "completed";
   report.phase = "completed";
 } catch (error) {
-  report.status = report.prompts_submitted > report.responses_confirmed ? "ambiguous" : "blocked";
-  // Controlled error category only, no exception messages that may contain signed URLs.
-  const allowed = ["security_challenge","composer_missing","previous_generation_active",
-   "send_button_disabled","ambiguous_user_message_count","ambiguous_assistant_message_count",
-   "generation_resumed","invalid_request_path","invalid_prompt_request","unsupported_target",
-   "missing_kernel_secret","no_context"];
-  report.error = allowed.includes(error?.message) ? error.message : "browser_or_dom_failure";
-  report.error_type = ["TimeoutError", "APIError", "APIConnectionError"].includes(error?.name) ? error.name : "other";
-  if (page) {
-    try {
-      report.dom_probe = await page.evaluate(() => {
-        const q = s => document.querySelectorAll(s).length;
-        return {
-          user_roles: q('[data-message-author-role="user"]'),
-          assistant_roles: q('[data-message-author-role="assistant"]'),
-          conversation_turns: q('[data-testid^="conversation-turn"]'),
-          all_articles: q('article'),
-          message_testids: [...new Set([...document.querySelectorAll('[data-testid]')]
-            .map(e => e.getAttribute('data-testid')).filter(s => /conversation|message|turn/i.test(s || "")))].slice(0,12),
-          send_button: q('button[aria-label="Send"]'),
-          stop_button: q('button[aria-label*="Stop"],[data-testid*="stop"]')
-        };
-      });
-      report.ui_probe = {
-        prompt_id: await page.locator("#prompt-textarea").count(),
-        composer_testid: await page.locator('[data-testid="composer-input"]').count(),
-        editable: await page.locator('[contenteditable="true"]').count(),
-        role_textbox: await page.getByRole("textbox").count(),
-        textarea: await page.locator("textarea").count(),
-        send_testid: await page.locator('[data-testid="send-button"]').count(),
-        send_candidates: await page.locator(SEND).count(),
-        send_aria: await page.getByRole("button", { name: /send|envoyer/i }).count(),
-        login_button: await page.getByRole("button", { name: /log in|se connecter/i }).count(),
-        challenge_title: /just a moment|attention required|verification/i.test(await page.title())
-      };
-    } catch { report.ui_probe = { status: "unavailable" }; }
-  }
+  report.status = report.send_attempts > report.responses_confirmed ? "ambiguous" : "blocked";
+  const safe = new Set([
+    "missing_kernel_secret", "invalid_request_path", "invalid_request",
+    "missing_context", "composer_missing", "send_button_missing", "send_disabled",
+    "security_challenge", "generation_already_active", "wrong_conversation",
+    "conversation_changed", "unexpected_turn_counts", "unexpected_user_turns",
+    "timeout_user", "timeout_assistant", "ambiguous_completion",
+    "not_new_conversation"
+  ]);
+  report.error = safe.has(error?.message) ? error.message : "browser_or_dom_failure";
+  report.error_type = ["TimeoutError","APIError","APIConnectionError"].includes(error?.name)
+    ? error.name : "other";
   process.exitCode = 1;
 } finally {
-  // Do not record the page URL: it can identify the user's private conversation.
-  try { if (browser) await browser.close(); } catch { report.close_error = true; }
+  try { if (browser) await browser.close(); } catch { report.browser_close = "failed"; }
   if (session && kernel) {
-    try { await kernel.browsers.deleteByID(session.session_id); report.cleanup = "deleted"; }
-    catch { report.cleanup = "delete_failed"; process.exitCode = 1; }
+    try {
+      await kernel.browsers.deleteByID(session.session_id);
+      report.cleanup = "deleted";
+    } catch {
+      report.cleanup = "delete_failed";
+      process.exitCode = 1;
+    }
   }
-  await reportFile();
-  console.log("KERNEL_SEQUENCE_REPORT=" + JSON.stringify(report));
+  await mkdir("artifacts", {recursive:true});
+  await writeFile("artifacts/kernel-sequence.json", JSON.stringify(report,null,2)+"\n");
+  console.log("KERNEL_SEQUENCE_REPORT="+JSON.stringify(report));
 }
