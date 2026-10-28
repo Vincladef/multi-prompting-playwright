@@ -28,6 +28,24 @@ const report = {
 };
 let kernel, session, browser, page;
 let threadPath = null;
+let baseline = { userActions: 0, assistantCompleted: 0 };
+
+function resolveTarget(input) {
+  const target = input.target || "new";
+  if (target === "new") {
+    if (input.target_url) fail("invalid_target");
+    return null;
+  }
+  if (target !== "existing" && target !== "caller") fail("invalid_target");
+  if (typeof input.target_url !== "string") fail("target_url_required");
+  let url;
+  try { url = new URL(input.target_url); } catch { fail("invalid_target_url"); }
+  if (url.protocol !== "https:" || url.hostname !== "chatgpt.com" ||
+      url.port || url.username || url.password || url.search || url.hash ||
+      !/^\\/c\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.pathname))
+    fail("invalid_target_url");
+  return url.origin + url.pathname;
+}
 
 function fail(code) { throw new Error(code); }
 async function waitForState(stage, predicate, timeoutMs) {
@@ -40,7 +58,7 @@ async function waitForState(stage, predicate, timeoutMs) {
       await page.waitForTimeout(POLL_MS);
       continue;
     }
-    if (state.userActions > report.prompts_submitted + 1)
+    if (state.userActions > baseline.userActions + report.prompts_submitted + 1)
       fail("unexpected_user_turns");
     if (predicate(state)) return state;
     await page.waitForTimeout(POLL_MS);
@@ -55,6 +73,7 @@ async function ensureReady() {
   const current = await page.evaluate(inspectChatDom);
   if (current.stop) fail("generation_already_active");
   if (!current.hasEditor) fail("composer_missing");
+  if (!current.editorEmpty) fail("composer_not_empty");
   return current;
 }
 async function sendAndConfirm(prompt, index) {
@@ -62,7 +81,8 @@ async function sendAndConfirm(prompt, index) {
   const before = await ensureReady();
   if (index > 0 && (!before.inConversation || !threadPath ||
       new URL(page.url()).pathname !== threadPath)) fail("wrong_conversation");
-  if (before.userActions !== index || before.assistantCompleted !== index)
+  if (before.userActions !== baseline.userActions + index ||
+      before.assistantCompleted !== baseline.assistantCompleted + index)
     fail("unexpected_turn_counts");
 
   report.phase = "filling_" + (index + 1);
@@ -104,7 +124,8 @@ async function sendAndConfirm(prompt, index) {
   // Final idempotence guard: the conversation is the same and the counters
   // still refer to exactly one new user message and one finished assistant.
   if (new URL(page.url()).pathname !== threadPath ||
-    after.userActions !== index + 1 || after.assistantCompleted !== index + 1)
+    after.userActions !== baseline.userActions + index + 1 ||
+    after.assistantCompleted !== baseline.assistantCompleted + index + 1)
     fail("ambiguous_completion");
 
   report.responses_confirmed += 1;
@@ -121,12 +142,13 @@ try {
   report.phase = "decrypting_request";
   const envelope = JSON.parse(await readFile(path, "utf8"));
   const input = unsealRequest(envelope, process.env.KERNEL_API_KEY);
-  if (input.mode !== "live" || (input.target && input.target !== "new") ||
+  if (input.mode !== "live" ||
       !Array.isArray(input.prompts) || input.prompts.length < 1 ||
       input.prompts.length > 20 ||
       !input.prompts.every(s => typeof s === "string" && !!s.trim() && s.length <= 10000))
     fail("invalid_request");
   report.prompts_total = input.prompts.length;
+  const destination = resolveTarget(input);
 
   kernel = new Kernel({ apiKey: process.env.KERNEL_API_KEY });
   session = await kernel.browsers.create({
@@ -141,12 +163,25 @@ try {
   if (!context) fail("missing_context");
   page = context.pages()[0] || await context.newPage();
   report.phase = "opening_chatgpt";
-  await page.goto("https://chatgpt.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
-  await ensureReady();
+  await page.goto(destination || "https://chatgpt.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
   await page.evaluate(installChatObserver);
-  const baseline = await page.evaluate(inspectChatDom);
-  if (baseline.userActions || baseline.assistantCompleted)
-    fail("not_new_conversation");
+  if (destination) {
+    // Never add a prompt while the invoking assistant may still be replying.
+    // The destination URL is inside the encrypted request, never written to logs.
+    baseline = await waitForState("existing_idle", state =>
+      state.inConversation && !state.stop && state.hasEditor && state.editorEmpty &&
+      state.userActions > 0 && state.userActions === state.assistantCompleted &&
+      state.mutationQuietMs !== null && state.mutationQuietMs >= QUIET_MS,
+      180000);
+    if (new URL(page.url()).pathname !== new URL(destination).pathname)
+      fail("wrong_conversation");
+    threadPath = new URL(destination).pathname;
+  } else {
+    await ensureReady();
+    baseline = await page.evaluate(inspectChatDom);
+    if (baseline.userActions || baseline.assistantCompleted)
+      fail("not_new_conversation");
+  }
   report.status = "running";
 
   for (let i = 0; i < input.prompts.length; i++) {
@@ -162,7 +197,9 @@ try {
     "security_challenge", "generation_already_active", "wrong_conversation",
     "conversation_changed", "unexpected_turn_counts", "unexpected_user_turns",
     "timeout_user", "timeout_assistant", "ambiguous_completion",
-    "not_new_conversation", "invalid_envelope", "invalid_secret_length"
+    "not_new_conversation", "invalid_envelope", "invalid_secret_length",
+    "invalid_target", "target_url_required", "invalid_target_url", "composer_not_empty",
+    "timeout_existing_idle"
   ]);
   report.error = safe.has(error?.message) ? error.message : "browser_or_dom_failure";
   report.error_type = ["TimeoutError","APIError","APIConnectionError"].includes(error?.name)
