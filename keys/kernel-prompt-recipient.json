@@ -1,0 +1,7 @@
+{
+  "format": "mp-kernel-x25519-aes256gcm-v1",
+  "public_key": "ovY/2UfDaCqGUEEsNUZGHWZtyR8dUVg+N4kfwruQZUM=",
+  "source": "Kernel GitHub secret-derived public key",
+  "created": "2026-10-28",
+  "rotation": "Recompute if KERNEL_API_KEY changes"
+}
