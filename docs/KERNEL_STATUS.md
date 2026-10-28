@@ -1,26 +1,38 @@
-# Kernel — état vérifié au 28 octobre 2026
+# Multi-Prompting Kernel — résultats vérifiés
 
-## Éléments confirmés
-- Profil Kernel `multi-prompting` créé, authentifié manuellement à ChatGPT, fermé avec sauvegarde et réouvert dans une nouvelle session authentifiée.
-- [GitHub Action 40668999952](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40668999952) : navigateur Kernel créé, CDP Playwright connecté, page publique et interface ChatGPT authentifiée reconnues, nettoyage terminé.
-- Nouveau moteur `src/kernel-sequence.mjs`, workflow `kernel-sequence.yml`, plugin indépendant `Multi-Prompting Kernel` : https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7.
+Dernière actualisation : 28 octobre 2026.
 
-## Limite réelle — ne pas confondre avec une réussite
-- [Run 40669823018](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40669823018) : échec de découverte du fichier de requête GitHub, **0 envoi** ; corrigé par `fetch-depth: 2`.
-- [Run 40669951996](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40669951996) : sélecteur du composeur absent, **0 envoi**.
-- [Run 40670170815](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40670170815) : composeur reconnu, bouton d'envoi introuvable, **0 envoi**.
-- [Run 40670535583](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40670535583) : **1 tentative d'envoi**, **0 réponse confirmée** : état **ambigu**, aucune relance.
-- [Run 40671017043](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40671017043) : champ transitoirement absent, **0 envoi** ; attente de disponibilité renforcée.
+## Réussites confirmées
 
-Le diagnostic [40670838406](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40670838406) a confirmé un composeur `DIV[role=textbox]` et un bouton `button[aria-label=Send][type=submit]`. Le diagnostic [40671205532](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40671205532) a constaté dans une conversation réelle que les anciens attributs `data-message-author-role` et `conversation-turn` étaient absents. Aucune réponse n'a été extraite.
+| Test | Lien | Résultat |
+|---|---|---|
+| Authentification persistante Kernel depuis GitHub Actions | [40668999952](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40668999952) | Succès, navigateur/CDP/interface identifiés et session nettoyée |
+| 3 prompts réels distincts, même conversation | [40673595092](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40673595092) | completed : 3 tentatives, 3 messages confirmés, 3 réponses terminées |
+| 2 prompts chiffrés de bout en bout | [40674400332](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40674400332) | completed : 2/2, déchiffrement en mémoire, nettoyage réussi |
+| Tests CI | [Actions](https://github.com/Vincladef/multi-prompting-playwright/actions) | Tests DOM, MutationObserver et cryptographie réussis |
 
-**L'enchaînement automatique réel de plusieurs prompts n'est donc PAS VALIDÉ.** Le moteur est conçu pour s'arrêter en état ambigu plutôt que risquer un envoi en double.
+Le moteur réel utilise src/kernel-sequence.mjs avec le détecteur src/kernel-dom.mjs. Les indicateurs DOM effectivement observés côté utilisateur sont Edit message et Copy message ; côté assistant terminé : Copy, Rate response et Regenerate response. La fin de réponse exige également absence de génération active et stabilité des mutations de la conversation. Le contenu textuel des réponses n'est jamais extrait.
 
-## Sécurité et confidentialité
-- Dépôt PUBLIC : fichiers `requests/kernel-*.json` et prompts publiquement lisibles. N'y placer aucun message privé ou confidentiel.
-- `KERNEL_API_KEY` est un secret GitHub Actions, absent du code.
-- Aucun contournement de protection, CAPTCHA, extraction de sortie, screenshot, cookie ou JWT dans les journaux.
-- Les conditions d'utilisation de ChatGPT doivent être respectées, en particulier l'interdiction d'extraction automatisée de données et de sortie.
+## Historique des échecs antérieurs, résolus
 
-## Étape restante
-Trouver, puis tester un signal fiable de fin de génération fondé sur l'interface actuelle, sans lire le contenu des réponses. Tester d'abord sur une nouvelle séquence explicite, en évitant de rejouer un run ambigu.
+- [40669823018](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40669823018) : fichier GitHub introuvable au premier essai, 0 message.
+- [40669951996](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40669951996) : ancien sélecteur de champ absent, 0 message.
+- [40670170815](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40670170815) : ancien sélecteur du bouton absent, 0 message.
+- [40670535583](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40670535583) : une tentative d'envoi, réponse non confirmée par l'ancienne logique. Non rejouée.
+- [40671017043](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40671017043) : ancien problème de disponibilité transitoire du composeur.
+- [40674250797](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40674250797) : YAML invalide pendant la migration au stockage chiffré, **aucun prompt envoyé**. Corrigé, puis test chiffré 2/2 réussi.
+
+Les diagnostics en lecture seule [40670838406](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40670838406) et [40673232775](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40673232775) ont identifié les contrôles HTML actuels. Le site n'expose plus les anciens data-message-author-role dans l'interface testée.
+
+## Confidentialité
+
+Le dépôt GitHub est public. Les requêtes futures sont exclusivement des enveloppes .sealed.json, chiffrées via une clé publique X25519 et AES-256-GCM ; le déchiffrement s'effectue dans GitHub Actions à partir du secret KERNEL_API_KEY, dérivé avec séparation cryptographique HKDF. Les prompts ne sont ni imprimés ni déposés en clair. Les métadonnées des fichiers restent publiques et les anciennes requêtes en clair restent présentes dans l'historique.
+
+Le plugin ChatGPT privé [Multi-Prompting Kernel](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7) est en version 1.1.0 avec les instructions de chiffrement et de lancement.
+
+## Limites maintenues
+
+- Utilisation d'une nouvelle conversation ChatGPT, non de la discussion ChatGPT qui a invoqué le plugin.
+- Le moteur ne vérifie pas le contenu des réponses et n'en extrait pas automatiquement le texte.
+- Un changement futur du DOM peut casser la détection ; ne pas réémettre automatiquement un prompt ayant pu être envoyé.
+- Respect des conditions d'utilisation, authentification et contrôles de sécurité ; aucun contournement de protections.
