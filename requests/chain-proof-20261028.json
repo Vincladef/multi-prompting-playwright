@@ -1,0 +1,11 @@
+{
+  "mode": "demo",
+  "id": "proof-20261028-01",
+  "prompts": [
+    "ALPHA",
+    "BRAVO",
+    "CHARLIE"
+  ],
+  "maxHops": 5,
+  "batchSize": 1
+}
