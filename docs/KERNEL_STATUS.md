@@ -4,7 +4,7 @@ Dernière actualisation : 28 octobre 2026.
 
 ## Extension en cours de validation : conversation préexistante
 
-Le 28 octobre 2026, le moteur a reçu les modes `existing` et `caller` avec URL de cible chiffrée, attente de fin du tour assistant, protection des brouillons et compteurs relatifs à l'historique. Les tests unitaires de validation d'URL et la CI passent ; **aucun résultat de test live de cette nouvelle branche n'est encore revendiqué**. Le plugin affiche désormais « Multi-Prompting » en version 1.2.0, mais son slug interne « multi-prompting-kernel » demeure inchangé.
+Le 28 octobre 2026, le moteur a reçu les modes `existing` et `caller` avec URL ou titre exact chiffrés, attente de fin du tour assistant, protection des brouillons et compteurs relatifs à l'historique. Les tests unitaires et les simulations Playwright passent ; **la recherche native a été validée sur Kernel en lecture seule, sans sélection d'un fil réel ni envoi dans un ancien fil**. Le plugin affiche désormais « Multi-Prompting » en version 1.3.0, mais son slug interne « multi-prompting-kernel » demeure inchangé.
 
 ## Réussites confirmées
 
@@ -32,11 +32,11 @@ Les diagnostics en lecture seule [40670838406](https://github.com/Vincladef/mult
 
 Le dépôt GitHub est public. Les requêtes futures sont exclusivement des enveloppes .sealed.json, chiffrées via une clé publique X25519 et AES-256-GCM ; le déchiffrement s'effectue dans GitHub Actions à partir du secret KERNEL_API_KEY, dérivé avec séparation cryptographique HKDF. Les prompts ne sont ni imprimés ni déposés en clair. Les métadonnées des fichiers restent publiques et les anciennes requêtes en clair restent présentes dans l'historique.
 
-Le plugin ChatGPT privé [Multi-Prompting Kernel](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7) est en version 1.1.0 avec les instructions de chiffrement et de lancement.
+Le plugin ChatGPT privé [Multi-Prompting Kernel](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7) est en version 1.3.0 avec les instructions de chiffrement et de lancement.
 
 ## Limites maintenues
 
-- Mode nouveau fil validé en réel ; mode fil existant ajouté et testé unitairement, sans validation réelle encore. L'URL du fil appelant n'est pas automatiquement fournie par l'API du plugin.
+- Mode nouveau fil validé en réel ; recherche native d'un titre absent validée sur Kernel, sans test de sélection positive d'un fil existant. L'URL ou le titre du fil appelant ne sont pas automatiquement fournis par l'API du plugin.
 - Le moteur ne vérifie pas le contenu des réponses et n'en extrait pas automatiquement le texte.
 - Un changement futur du DOM peut casser la détection ; ne pas réémettre automatiquement un prompt ayant pu être envoyé.
 - Respect des conditions d'utilisation, authentification et contrôles de sécurité ; aucun contournement de protections.
@@ -44,3 +44,12 @@ Le plugin ChatGPT privé [Multi-Prompting Kernel](https://chatgpt.com/plugins/pl
 ## Recherche par titre exact : vérification à effectuer
 
 Branche `feat/kernel-existing-chat-title-lookup` : connexion du module de recherche au moteur, titre chiffré, vérification des résultats uniques et support des historiques à compteurs divergents. Le plugin doit obtenir un titre fiable : le navigateur distant ne peut pas deviner quelle conversation invoque le plugin. Les tests Playwright simulés et la CI doivent être vérifiés sur la branche ; un test réel Kernel sur un fil existant reste distinct et nécessaire avant de déclarer cette fonction validée en production.
+
+## Vérification Kernel de la recherche (lecture seule)
+
+- [Action 40681526607](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40681526607) : champ de recherche introuvable après le raccourci seul ; aucune écriture.
+- [Action 40681813090](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40681813090) : identification du bouton visible `Search` ; aucune écriture.
+- [Action 40681922748](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40681922748) : fenêtre ouverte, champ `combobox` et placeholder `Search…` identifiés ; aucune écriture.
+- [Action 40682023141](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40682023141) : **completed**, recherche d'un titre volontairement absent, clôture de session Kernel réussie ; zéro message envoyé.
+
+Cette validation prouve l'accès à la recherche et le traitement sûr d'un titre absent. Elle ne prouve pas encore la bonne sélection d'un résultat réel ni l'enchaînement de prompts dans un fil historique.
