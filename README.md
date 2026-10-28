@@ -70,3 +70,20 @@ La voie officiellement prise en charge pour une exécution multi-tours automatis
 - Seconde sonde, après attente allongée : **0/3** ; la page renvoie le titre **« Just a moment... »**, sans champ de saisie. Cela indique une protection ou vérification d'accès que le moteur ne doit pas contourner, [exécution GitHub](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40429908722).
 
 **La limite actuelle est le vrai site ChatGPT, pas la durée de GitHub Actions.** Le workflow séquentiel admet désormais 180 minutes par job et le moteur permet jusqu'à 45 minutes par réponse par défaut. Une session ChatGPT authentifiée n'est pas disponible dans les runners GitHub éphémères ; aucune donnée d'authentification n'est stockée.
+
+## Chaînage automatique entre plusieurs jobs (28 octobre 2026)
+
+Le moteur de reprise se trouve dans `src/chain-state.mjs` et `src/chain-run.mjs`. Le nouveau [workflow de relais](https://github.com/Vincladef/multi-prompting-playwright/actions/workflows/chain-sequence.yml) démarre lorsqu'un fichier `requests/chain-*.json` est ajouté sur `main`. Il peut déclencher le job suivant via `workflow_dispatch` avec le `GITHUB_TOKEN` intégré et `actions: write`, sans jeton personnel ni agent IA.
+
+Le checkpoint contient un identifiant de séquence, la liste des **prompts de démonstration**, l'index `next`, le numéro `hop`, la liste des étapes confirmées et les plafonds `batchSize` et `maxHops`. Le résultat de chaque job est archivé en JSON. Les relais et les erreurs sont bloquants : pas de réémission automatique d'un envoi ambigu.
+
+**Preuve de bout en bout, trois jobs distincts réussis :**
+- [Job 1, étape 1/3](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40638666466) : `handoff_dispatched` ;
+- [Job 2, étape 2/3](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40638722926) : `handoff_dispatched` ;
+- [Job 3, étape 3/3](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40638795085) : `completed`.
+
+Il s'agit d'une **preuve du chaînage GitHub Actions**, avec une fixture de conversation locale et simulée. Chaque nouveau job recrée Chromium ; **aucune session ChatGPT réelle n'est transmise**. Un [nouveau contrôle du vrai site le 28 octobre](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40638720473) s'est de nouveau arrêté à `blocked`, **0/3** messages, en mode invité.
+
+**Sécurité et confidentialité :** le dépôt est public et l'état encodé dans `workflow_dispatch` n'est **pas chiffré** : uniquement des prompts de démonstration non confidentiels. Le service Neon n'est pas encore relié à ce workflow ; le checkpoint du prototype transite par les entrées de workflow et ses artefacts. Pour exploiter des prompts privés, il faudra un stockage privé et des secrets configurés sur le runner. Le serveur MCP connecté sur Render n'accorde pas d'accès de navigateur authentifié à GitHub.
+
+La limite du job reste de 180 minutes, avec un maximum GitHub de 6 heures sur runners hébergés ; la progression est reprise au job suivant, sans prolonger l'ancien processus ni conserver sa mémoire navigateur.
