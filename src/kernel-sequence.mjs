@@ -4,6 +4,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { inspectChatDom, installChatObserver } from "./kernel-dom.mjs";
 import { unsealRequest } from "./kernel-sealed.mjs";
+import { resolveTarget } from "./kernel-target.mjs";
 
 // No message text extraction, screenshots, cookies, signed URLs or private thread URLs.
 // Only generic DOM actions of the currently authenticated ChatGPT interface.
@@ -31,22 +32,6 @@ let threadPath = null;
 let baseline = { userActions: 0, assistantCompleted: 0 };
 let trackingEnabled = false;
 
-function resolveTarget(input) {
-  const target = input.target || "new";
-  if (target === "new") {
-    if (input.target_url) fail("invalid_target");
-    return null;
-  }
-  if (target !== "existing" && target !== "caller") fail("invalid_target");
-  if (typeof input.target_url !== "string") fail("target_url_required");
-  let url;
-  try { url = new URL(input.target_url); } catch { fail("invalid_target_url"); }
-  if (url.protocol !== "https:" || url.hostname !== "chatgpt.com" ||
-      url.port || url.username || url.password || url.search || url.hash ||
-      !/^\\/c\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.pathname))
-    fail("invalid_target_url");
-  return url.origin + url.pathname;
-}
 
 function fail(code) { throw new Error(code); }
 async function waitForState(stage, predicate, timeoutMs) {
