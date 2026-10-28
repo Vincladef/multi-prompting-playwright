@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "requests/kernel-*.sealed.json"
+      - "!requests/kernel-title-*.sealed.json"
   workflow_dispatch:
     inputs:
       request_path:
