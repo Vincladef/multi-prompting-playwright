@@ -1,0 +1,8 @@
+{
+  "mode": "live",
+  "target": "new",
+  "prompts": [
+    "Test technique : réponds exactement ALPHA.",
+    "Test technique : réponds exactement BRAVO."
+  ]
+}
