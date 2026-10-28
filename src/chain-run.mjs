@@ -11,7 +11,7 @@ let report={mode,status:"blocked",runId:process.env.GITHUB_RUN_ID||null,
 let adapter;
 async function loadState() {
   if(process.env.CHAIN_STATE?.trim()) return decode(process.env.CHAIN_STATE.trim());
-  const changed=execFileSync("git",["diff-tree","--no-commit-id","--name-only","-r","HEAD"],{encoding:"utf8"}).trim().split(/\r?\n/);
+  const changed=execFileSync("git",["-c","safe.directory="+process.cwd(),"diff-tree","--no-commit-id","--name-only","-r","HEAD"],{encoding:"utf8"}).trim().split(/\r?\n/);
   const matches=changed.filter(x=>/^requests\/chain-[A-Za-z0-9_.-]+\.json$/.test(x));
   if(matches.length!==1)throw Error("Un commit doit creer une seule demande chain-*.json");
   const request=JSON.parse(await readFile(matches[0],"utf8"));
