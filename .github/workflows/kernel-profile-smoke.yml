@@ -1,0 +1,44 @@
+name: Kernel - Test profil persistant (lecture seule)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "probes/kernel-smoke-*.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-profile-smoke
+  cancel-in-progress: false
+
+jobs:
+  profile-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer Playwright et Kernel
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @onkernel/sdk
+      - name: Valider le script
+        run: node --check src/kernel-smoke.mjs
+      - name: Tester la connexion au profil distant sans envoyer de messages
+        env:
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+        run: node src/kernel-smoke.mjs
+      - name: Archiver uniquement le rapport sans données personnelles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-profile-smoke
+          path: artifacts/kernel-smoke.json
+          retention-days: 3
+          if-no-files-found: warn
