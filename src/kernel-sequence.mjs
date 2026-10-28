@@ -11,7 +11,7 @@ const ASSISTANT = '[data-message-author-role="assistant"]';
 const USER = '[data-message-author-role="user"]';
 const COMPOSER = '#prompt-textarea, [data-testid="composer-input"], [role="textbox"][contenteditable="true"], [contenteditable="true"], [role="textbox"], textarea[placeholder]';
 const STOP = '[data-testid="stop-button"], [data-testid="composer-stop-button"]';
-const SEND = '[data-testid="send-button"], [data-testid*="send"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[aria-label="Envoyer"], button[aria-label="Envoyer le message"], button[type="submit"]';
+const SEND = 'button[aria-label="Send"], [data-testid="send-button"], [data-testid*="send"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[aria-label="Envoyer"], button[aria-label="Envoyer le message"], button[type="submit"]';
 
 const report = { kind: "kernel-sequence", mode: "live", status: "initializing", phase: "initialization",
   prompts_total: 0, prompts_submitted: 0, responses_confirmed: 0,
@@ -36,8 +36,9 @@ async function assertReady() {
   const title = await page.title();
   if (/just a moment|attention required|verification/i.test(title))
     throw new Error("security_challenge");
-  if (await page.locator(COMPOSER).count() === 0)
-    throw new Error("composer_missing");
+  // The SPA can replace the editor between renders: wait for a usable editor.
+  try { await page.locator(COMPOSER).first().waitFor({ state: "visible", timeout: 20000 }); }
+  catch { throw new Error("composer_missing"); }
 }
 async function sendOne(prompt) {
   report.phase = "locating_composer";
