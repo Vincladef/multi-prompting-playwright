@@ -38,10 +38,11 @@ try {
   });
   // Read only the DOM structure of the first listed conversation, never any text or IDs.
   try {
-    const first = page.locator('a[href^="/c/"]').first();
+    const named = page.getByRole("link", {name: /Répondre ALPHA|Réponds exactement ALPHA/i}).first();
+    const first = (await named.count()) > 0 ? named : page.locator('a[href^="/c/"]').last();
     if (await first.count()) {
       await first.click();
-      await page.waitForTimeout(1900);
+      await page.waitForTimeout(3200);
       report.conversation_structure = await page.evaluate(() => {
         const q = s => document.querySelectorAll(s).length;
         return {
@@ -70,6 +71,15 @@ try {
             classes: [...el.classList].filter(s => /^[a-zA-Z0-9_:\\[\\]-]{1,60}$/.test(s)).slice(0,6),
             children: el.children.length
           })),
+          action_groups: [...document.querySelectorAll('main button[aria-label="Copy message"]')].slice(-4).map(btn=>{
+            const result={};
+            let el=btn;
+            for(let level=0;level<7&&el;level++,el=el.parentElement){
+              const buttons=[...el.querySelectorAll('button')].map(b=>b.getAttribute("aria-label")||"unlabeled").slice(0,14);
+              result["level_"+level]={tag:el.tagName,role:el.getAttribute("role"),classes:[...el.classList].slice(0,7),buttons,child_count:el.children.length};
+            }
+            return result;
+          }),
           class_frequencies: Object.entries([...document.querySelectorAll("main *")].reduce((a,el)=>{
             for (const token of el.classList) {
               if (!/^(group|prose|markdown|message|turn|relative|flex|items-|justify-|rounded|self-|text-|bg-)/.test(token)) continue;
