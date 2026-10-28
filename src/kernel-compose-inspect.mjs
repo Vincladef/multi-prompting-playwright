@@ -42,7 +42,8 @@ try {
     const first = (await named.count()) > 0 ? named : page.locator('a[href^="/c/"]').last();
     if (await first.count()) {
       await first.click();
-      await page.waitForTimeout(3200);
+      try { await page.locator('button[aria-label="Copy message"]').first().waitFor({state:"attached",timeout:15000}); } catch {}
+      await page.waitForTimeout(1200);
       report.conversation_structure = await page.evaluate(() => {
         const q = s => document.querySelectorAll(s).length;
         return {
