@@ -126,7 +126,7 @@ try {
   report.status = "completed";
   report.phase = "completed";
 } catch (error) {
-  report.status = "blocked";
+  report.status = report.prompts_submitted > report.responses_confirmed ? "ambiguous" : "blocked";
   // Controlled error category only, no exception messages that may contain signed URLs.
   const allowed = ["security_challenge","composer_missing","previous_generation_active",
    "send_button_disabled","ambiguous_user_message_count","ambiguous_assistant_message_count",
@@ -136,6 +136,19 @@ try {
   report.error_type = ["TimeoutError", "APIError", "APIConnectionError"].includes(error?.name) ? error.name : "other";
   if (page) {
     try {
+      report.dom_probe = await page.evaluate(() => {
+        const q = s => document.querySelectorAll(s).length;
+        return {
+          user_roles: q('[data-message-author-role="user"]'),
+          assistant_roles: q('[data-message-author-role="assistant"]'),
+          conversation_turns: q('[data-testid^="conversation-turn"]'),
+          all_articles: q('article'),
+          message_testids: [...new Set([...document.querySelectorAll('[data-testid]')]
+            .map(e => e.getAttribute('data-testid')).filter(s => /conversation|message|turn/i.test(s || "")))].slice(0,12),
+          send_button: q('button[aria-label="Send"]'),
+          stop_button: q('button[aria-label*="Stop"],[data-testid*="stop"]')
+        };
+      });
       report.ui_probe = {
         prompt_id: await page.locator("#prompt-textarea").count(),
         composer_testid: await page.locator('[data-testid="composer-input"]').count(),
