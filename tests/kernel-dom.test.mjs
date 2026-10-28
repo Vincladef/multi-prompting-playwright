@@ -11,6 +11,7 @@ test("ChatGPT Oct 2026: distinguish user actions from assistant completion", asy
     await page.evaluate(installChatObserver);
     let state = await page.evaluate(inspectChatDom);
     assert.equal(state.hasEditor, true);
+    assert.equal(state.editorEmpty, true);
     assert.equal(state.userActions, 0);
     assert.equal(state.assistantCompleted, 0);
     await page.locator("main").evaluate(el => {
@@ -38,6 +39,7 @@ test("Observer sees conversation DOM changes and ignores editor changes", async 
     const before = await page.evaluate(inspectChatDom);
     await page.locator('[contenteditable="true"]').fill("Test");
     const afterInput = await page.evaluate(inspectChatDom);
+    assert.equal(afterInput.editorEmpty, false);
     assert.equal(afterInput.mutationVersion, before.mutationVersion);
     await page.locator("main").evaluate(el => el.insertAdjacentHTML("beforeend", '<div aria-label="turn"></div>'));
     await page.waitForTimeout(50);
