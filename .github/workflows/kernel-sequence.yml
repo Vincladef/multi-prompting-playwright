@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -45,7 +47,7 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             path="$REQUEST_PATH"
           else
-            path=$(git diff-tree --no-commit-id --name-only -r "$HEAD_COMMIT" | grep '^requests/kernel-[a-zA-Z0-9_-]*\.json$' | head -n1 || true)
+            path=$(git diff --name-only --diff-filter=A "$HEAD_COMMIT^" "$HEAD_COMMIT" | grep '^requests/kernel-[a-zA-Z0-9_-]*\.json$' | head -n1 || true)
           fi
           if [ -z "$path" ]; then
             echo "Aucune demande Kernel autorisée dans ce commit."
