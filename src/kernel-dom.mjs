@@ -22,6 +22,7 @@ export function inspectChatDom() {
   return {
     userActions, assistantCopies, assistantRegenerates, assistantRates, assistantCompleted,
     stop, hasEditor: !!editor && !!editor.getClientRects().length,
+    editorEmpty: !!editor && !(editor.textContent || "").trim() && !editor.querySelector("img, video, [data-testid*=attachment]"),
     sendEnabled: !!send && !send.disabled,
     inConversation: /^\/c\//.test(location.pathname),
     mutationVersion: observer?.version || 0,
