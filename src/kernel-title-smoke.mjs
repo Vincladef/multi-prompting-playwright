@@ -41,7 +41,7 @@ try {
         });
         return {
           dialogs:[...document.querySelectorAll('[role="dialog"]')].filter(visible).length,
-          search_route:/^\\/search(?:\\/|$)/.test(location.pathname),
+          search_route:location.pathname.startsWith("/search"),
           controls:[...document.querySelectorAll('input,textarea,[role="searchbox"],[role="combobox"],[contenteditable="true"]')]
             .filter(visible).slice(0,12).map(attrs),
           search_buttons:[...document.querySelectorAll("button")].filter(visible)
