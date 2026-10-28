@@ -2,6 +2,10 @@
 
 Dernière actualisation : 28 octobre 2026.
 
+## Extension en cours de validation : conversation préexistante
+
+Le 28 octobre 2026, le moteur a reçu les modes `existing` et `caller` avec URL de cible chiffrée, attente de fin du tour assistant, protection des brouillons et compteurs relatifs à l'historique. Les tests unitaires de validation d'URL et la CI passent ; **aucun résultat de test live de cette nouvelle branche n'est encore revendiqué**. Le plugin affiche désormais « Multi-Prompting » en version 1.2.0, mais son slug interne « multi-prompting-kernel » demeure inchangé.
+
 ## Réussites confirmées
 
 | Test | Lien | Résultat |
@@ -32,7 +36,7 @@ Le plugin ChatGPT privé [Multi-Prompting Kernel](https://chatgpt.com/plugins/pl
 
 ## Limites maintenues
 
-- Utilisation d'une nouvelle conversation ChatGPT, non de la discussion ChatGPT qui a invoqué le plugin.
+- Mode nouveau fil validé en réel ; mode fil existant ajouté et testé unitairement, sans validation réelle encore. L'URL du fil appelant n'est pas automatiquement fournie par l'API du plugin.
 - Le moteur ne vérifie pas le contenu des réponses et n'en extrait pas automatiquement le texte.
 - Un changement futur du DOM peut casser la détection ; ne pas réémettre automatiquement un prompt ayant pu être envoyé.
 - Respect des conditions d'utilisation, authentification et contrôles de sécurité ; aucun contournement de protections.
