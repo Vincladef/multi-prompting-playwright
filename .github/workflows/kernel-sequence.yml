@@ -38,6 +38,8 @@ jobs:
         run: |
           node --check src/kernel-sequence.mjs
           node --check src/kernel-dom.mjs
+          node --check src/kernel-target.mjs
+          node --check src/kernel-search-title.mjs
           node --check src/kernel-sealed.mjs
       - name: Exécuter la séquence chiffrée dans Kernel
         env:

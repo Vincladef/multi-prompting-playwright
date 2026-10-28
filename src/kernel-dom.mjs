@@ -16,12 +16,19 @@ export function inspectChatDom() {
   const assistantRegenerates = count("Regenerate response");
   const assistantRates = count("Rate response");
   const assistantCompleted = Math.min(assistantCopies, assistantRegenerates, assistantRates);
+  // Existing threads may have unequal historical action counts. Check the
+  // actual LAST visible turn instead of requiring lifetime counter parity.
+  const lastUserIndex = buttons.findLastIndex(b => b.getAttribute("aria-label") === "Edit message");
+  const lastAssistantIndex = buttons.findLastIndex(b =>
+    b.getAttribute("aria-label") === "Regenerate response");
+  const lastTurnCompleted = lastUserIndex >= 0 &&
+    lastAssistantIndex > lastUserIndex && !stop;
   const editor = document.querySelector('main [role="textbox"][contenteditable="true"]');
   const send = buttons.find(button => button.getAttribute("aria-label") === "Send" && !!button.getClientRects().length);
   const observer = window.__mp_dom_watch?.state;
   return {
     userActions, assistantCopies, assistantRegenerates, assistantRates, assistantCompleted,
-    stop, hasEditor: !!editor && !!editor.getClientRects().length,
+    stop, lastTurnCompleted, hasEditor: !!editor && !!editor.getClientRects().length,
     editorEmpty: !!editor && !(editor.textContent || "").trim() && !editor.querySelector("img, video, [data-testid*=attachment]"),
     sendEnabled: !!send && !send.disabled,
     inConversation: /^\/c\//.test(location.pathname),

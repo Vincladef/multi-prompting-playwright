@@ -43,3 +43,11 @@ Les anciens workflows run-sequence.yml et chain-sequence.yml concernent des **co
 Le moteur ne vérifie ni la justesse ni le contenu textuel des réponses. La structure du site peut évoluer. **Mode conversation existante implémenté mais pas encore validé en exécution réelle.** Le plugin ne reçoit pas automatiquement l'identifiant de la conversation qui l'invoque : il doit résoudre son URL avec certitude (lien fourni ou onglet Browser identifiable), sinon ne lance rien. Aucune URL privée n'est journalisée.
 
 Voir [docs/KERNEL_STATUS.md](docs/KERNEL_STATUS.md) pour les résultats exacts.
+
+## Ciblage par titre exact (branche de développement)
+
+Les modes `caller` et `existing` acceptent désormais **soit** `target_url` **soit** `target_title` dans la charge chiffrée ; les deux ensemble sont refusés. Par exemple : `{"mode":"live","target":"caller","target_title":"Titre exact transmis","prompts":["..."]}`. Le plugin doit récupérer le titre auprès de l'utilisateur ou d'un contexte d'onglet identifié de manière certaine ; le titre du fil appelant ne lui est **pas automatiquement transmis**. Ne jamais déduire ce titre à partir du sujet de la conversation.
+
+Le navigateur authentifié effectue `Ctrl+K`, recherche ce titre, contrôle une correspondance textuelle et une destination canonique uniques, puis vérifie l'URL après ouverture. En cas de titres homonymes, absence de résultat ou changement du DOM : arrêt avant tout envoi. Le mode `new` et le ciblage par URL restent inchangés. Le traitement ne lit que les titres des résultats de recherche, jamais les réponses du fil.
+
+Les historiques dont les compteurs utilisateur/assistant sont différents ne sont plus bloqués pour cette seule raison ; le contrôle porte également sur le dernier tour visible. Si les anciens tours sont virtualisés ou incomplets, le moteur reste volontairement prudent. Les tests avec navigateur simulé ne prouvent pas une exécution Kernel réelle sur un fil préexistant.

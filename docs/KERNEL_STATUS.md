@@ -40,3 +40,7 @@ Le plugin ChatGPT privé [Multi-Prompting Kernel](https://chatgpt.com/plugins/pl
 - Le moteur ne vérifie pas le contenu des réponses et n'en extrait pas automatiquement le texte.
 - Un changement futur du DOM peut casser la détection ; ne pas réémettre automatiquement un prompt ayant pu être envoyé.
 - Respect des conditions d'utilisation, authentification et contrôles de sécurité ; aucun contournement de protections.
+
+## Recherche par titre exact : vérification à effectuer
+
+Branche `feat/kernel-existing-chat-title-lookup` : connexion du module de recherche au moteur, titre chiffré, vérification des résultats uniques et support des historiques à compteurs divergents. Le plugin doit obtenir un titre fiable : le navigateur distant ne peut pas deviner quelle conversation invoque le plugin. Les tests Playwright simulés et la CI doivent être vérifiés sur la branche ; un test réel Kernel sur un fil existant reste distinct et nécessaire avant de déclarer cette fonction validée en production.

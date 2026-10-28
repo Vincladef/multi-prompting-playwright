@@ -5,6 +5,7 @@ import { basename } from "node:path";
 import { inspectChatDom, installChatObserver } from "./kernel-dom.mjs";
 import { unsealRequest } from "./kernel-sealed.mjs";
 import { resolveTarget } from "./kernel-target.mjs";
+import { openConversationByTitle } from "./kernel-search-title.mjs";
 
 // No message text extraction, screenshots, cookies, signed URLs or private thread URLs.
 // Only generic DOM actions of the currently authenticated ChatGPT interface.
@@ -65,7 +66,7 @@ async function ensureReady() {
 async function sendAndConfirm(prompt, index) {
   report.phase = "ready_" + (index + 1);
   const before = await ensureReady();
-  if (index > 0 && (!before.inConversation || !threadPath ||
+  if (threadPath && (!before.inConversation ||
       new URL(page.url()).pathname !== threadPath)) fail("wrong_conversation");
   if (before.userActions !== baseline.userActions + index ||
       before.assistantCompleted !== baseline.assistantCompleted + index)
@@ -135,6 +136,8 @@ try {
     fail("invalid_request");
   report.prompts_total = input.prompts.length;
   const destination = resolveTarget(input);
+  const lookupTitle = destination && typeof destination === "object" ? destination.title : null;
+  const directUrl = typeof destination === "string" ? destination : null;
 
   kernel = new Kernel({ apiKey: process.env.KERNEL_API_KEY });
   session = await kernel.browsers.create({
@@ -149,19 +152,26 @@ try {
   if (!context) fail("missing_context");
   page = context.pages()[0] || await context.newPage();
   report.phase = "opening_chatgpt";
-  await page.goto(destination || "https://chatgpt.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
+  await page.goto(directUrl || "https://chatgpt.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
+  if (lookupTitle) {
+    report.phase = "finding_conversation";
+    await openConversationByTitle(page, lookupTitle);
+  }
+  // Install the observer AFTER selecting the destination; full navigation can
+  // otherwise destroy an observer installed on ChatGPT's home page.
   await page.evaluate(installChatObserver);
   if (destination) {
     // Never add a prompt while the invoking assistant may still be replying.
     // The destination URL is inside the encrypted request, never written to logs.
     baseline = await waitForState("existing_idle", state =>
       state.inConversation && !state.stop && state.hasEditor && state.editorEmpty &&
-      state.userActions > 0 && state.userActions === state.assistantCompleted &&
+      state.lastTurnCompleted && state.assistantCompleted > 0 &&
       state.mutationQuietMs !== null && state.mutationQuietMs >= QUIET_MS,
       180000);
-    if (new URL(page.url()).pathname !== new URL(destination).pathname)
+    const selectedUrl = directUrl || page.url();
+    if (new URL(page.url()).pathname !== new URL(selectedUrl).pathname)
       fail("wrong_conversation");
-    threadPath = new URL(destination).pathname;
+    threadPath = new URL(selectedUrl).pathname;
   } else {
     await ensureReady();
     baseline = await page.evaluate(inspectChatDom);
@@ -186,7 +196,10 @@ try {
     "timeout_user", "timeout_assistant", "ambiguous_completion",
     "not_new_conversation", "invalid_envelope", "invalid_secret_length",
     "invalid_target", "target_url_required", "invalid_target_url", "composer_not_empty",
-    "timeout_existing_idle"
+    "timeout_existing_idle", "invalid_target_title", "conflicting_target_identifiers",
+    "target_identifier_required", "search_input_not_found",
+    "search_results_region_missing", "conversation_title_not_found",
+    "conversation_title_ambiguous", "conversation_search_changed"
   ]);
   report.error = safe.has(error?.message) ? error.message : "browser_or_dom_failure";
   report.error_type = ["TimeoutError","APIError","APIConnectionError"].includes(error?.name)
