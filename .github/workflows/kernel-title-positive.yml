@@ -1,0 +1,47 @@
+name: Kernel - Titre exact du fil (lecture seule chiffrée)
+on:
+  push:
+    branches: [main]
+    paths: ["requests/kernel-title-*.sealed.json"]
+permissions:
+  contents: read
+concurrency:
+  group: multi-prompting-kernel-title-readonly
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.actor == 'Vincladef'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer SDK Kernel
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @onkernel/sdk
+      - name: Validation syntaxique
+        run: node --check src/kernel-title-positive.mjs
+      - name: Rechercher le fil sans envoyer de message
+        env:
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+          HEAD_COMMIT: ${{ github.event.head_commit.id }}
+        run: |
+          path=$(git diff --name-only --diff-filter=A "$HEAD_COMMIT^" "$HEAD_COMMIT" | grep '^requests/kernel-title-[a-zA-Z0-9_-]*\.sealed\.json$' | head -n1 || true)
+          if [ -z "$path" ]; then
+            echo "Aucune requête chiffrée trouvée."
+            exit 1
+          fi
+          export TITLE_MATCH_REQUEST="$path"
+          node src/kernel-title-positive.mjs
+      - name: Publier rapport anonyme
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-title-positive
+          path: artifacts/kernel-title-positive.json
+          retention-days: 2
