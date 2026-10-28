@@ -8,7 +8,7 @@ import { openConversationByTitle } from "./kernel-search-title.mjs";
 // Read-only positive integration test: URL and title decrypted in memory.
 // Never print or persist private title, URL, message text or DOM content.
 const report={kind:"kernel-title-positive-readonly",status:"initializing",cleanup:"not_needed"};
-let kernel,session,browser;
+let kernel,session,browser,page,expectedTitle;
 try {
   const secret=process.env.KERNEL_API_KEY;
   if (!secret) throw new Error("missing_kernel_secret");
@@ -19,6 +19,7 @@ try {
   if (data.kind !== "title-readonly-match") throw new Error("invalid_request");
   const expected=resolveTarget({target:"existing",target_url:data.expected_target_url});
   const title=resolveTarget({target:"existing",target_title:data.target_title}).title;
+  expectedTitle=title;
   kernel=new Kernel({apiKey:secret});
   session=await kernel.browsers.create({
     name:"multi-prompting-title-readonly-match",headless:true,stealth:false,
@@ -28,7 +29,7 @@ try {
   browser=await chromium.connectOverCDP(session.cdp_ws_url,{timeout:45000});
   const context=browser.contexts()[0];
   if (!context) throw new Error("missing_context");
-  const page=context.pages()[0] || await context.newPage();
+  page=context.pages()[0] || await context.newPage();
   await page.goto("https://chatgpt.com/",{waitUntil:"domcontentloaded",timeout:45000});
   const selected=await openConversationByTitle(page,title);
   if (selected !== expected) throw new Error("wrong_conversation");
@@ -36,6 +37,31 @@ try {
   report.exact_title_resolved=true;
   report.expected_url_matched=true;
 } catch(e) {
+  if(page && expectedTitle) {
+    try {
+      report.search_structure=await page.evaluate(expected => {
+        const visible=el=>!!el.getClientRects().length &&
+          getComputedStyle(el).visibility!=="hidden";
+        const dialog=[...document.querySelectorAll('[role="dialog"]')].find(visible);
+        const region=dialog || document.querySelector("main");
+        const items=[...(region?.querySelectorAll("a,button,[role=option],[role=button],[role=listitem]") || [])].filter(visible);
+        const exact=el=>[el,...el.querySelectorAll("*")].some(n=>n.children.length===0 &&
+          (n.textContent||"").normalize("NFC").trim()===expected);
+        const chatLink=el=>el.tagName==="A" && /\/c\//.test(el.getAttribute("href")||"");
+        return {
+          dialog_visible:!!dialog,
+          search_path:location.pathname.startsWith("/search"),
+          input_roles:[...document.querySelectorAll("input")].filter(visible).map(el=>el.getAttribute("role")).slice(0,5),
+          visible_items:items.length,
+          matching_title_elements:items.filter(exact).length,
+          visible_chat_anchors:items.filter(chatLink).length,
+          matching_title_anchors:items.filter(el=>chatLink(el)&&exact(el)).length,
+          types:items.slice(0,18).map(el=>({tag:el.tagName.toLowerCase(),role:el.getAttribute("role"),
+            testid:el.getAttribute("data-testid"),href_kind:chatLink(el)?"chat":"other",exact_title:exact(el)}))
+        };
+      },expectedTitle);
+    } catch {report.search_structure={inspection:"unavailable"};}
+  }
   report.status="blocked";
   const safe=new Set(["missing_kernel_secret","invalid_request_path","invalid_request",
     "invalid_envelope","invalid_target_title","invalid_target_url","missing_context",
