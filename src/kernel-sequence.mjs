@@ -29,6 +29,7 @@ const report = {
 let kernel, session, browser, page;
 let threadPath = null;
 let baseline = { userActions: 0, assistantCompleted: 0 };
+let trackingEnabled = false;
 
 function resolveTarget(input) {
   const target = input.target || "new";
@@ -58,7 +59,7 @@ async function waitForState(stage, predicate, timeoutMs) {
       await page.waitForTimeout(POLL_MS);
       continue;
     }
-    if (state.userActions > baseline.userActions + report.prompts_submitted + 1)
+    if (trackingEnabled && state.userActions > baseline.userActions + report.prompts_submitted + 1)
       fail("unexpected_user_turns");
     if (predicate(state)) return state;
     await page.waitForTimeout(POLL_MS);
@@ -182,6 +183,7 @@ try {
     if (baseline.userActions || baseline.assistantCompleted)
       fail("not_new_conversation");
   }
+  trackingEnabled = true;
   report.status = "running";
 
   for (let i = 0; i < input.prompts.length; i++) {
