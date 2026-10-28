@@ -36,6 +36,29 @@ try {
     }
     return info;
   });
+  // Read only the DOM structure of the first listed conversation, never any text or IDs.
+  try {
+    const first = page.locator('a[href^="/c/"]').first();
+    if (await first.count()) {
+      await first.click();
+      await page.waitForTimeout(1900);
+      report.conversation_structure = await page.evaluate(() => {
+        const q = s => document.querySelectorAll(s).length;
+        return {
+          is_conversation: location.pathname.startsWith("/c/"),
+          role_user: q('[data-message-author-role="user"]'),
+          role_assistant: q('[data-message-author-role="assistant"]'),
+          articles: q("main article"),
+          turn_testids: q('[data-testid^="conversation-turn"]'),
+          messages: q('[data-testid*="message"]'),
+          generic_testids: [...new Set([...document.querySelectorAll("main [data-testid]")]
+            .map(e => e.getAttribute("data-testid")).filter(Boolean))].slice(0,18),
+          main_children: [...(document.querySelector("main")?.children || [])].slice(0,8)
+            .map(el => ({tag:el.tagName, role:el.getAttribute("role"), testid:el.getAttribute("data-testid")}))
+        };
+      });
+    } else report.conversation_structure = {is_conversation:false,reason:"no_visible_chat_link"};
+  } catch { report.conversation_structure = {status:"inspection_unavailable"}; }
   report.status = "completed";
 } catch(e) {
   report.status = "blocked";
