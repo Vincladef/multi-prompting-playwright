@@ -53,3 +53,9 @@ Branche `feat/kernel-existing-chat-title-lookup` : connexion du module de recher
 - [Action 40682023141](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40682023141) : **completed**, recherche d'un titre volontairement absent, clôture de session Kernel réussie ; zéro message envoyé.
 
 Cette validation prouve l'accès à la recherche et le traitement sûr d'un titre absent. Elle ne prouve pas encore la bonne sélection d'un résultat réel ni l'enchaînement de prompts dans un fil historique.
+
+## Validation positive du fil appelant, limites constatées
+
+Un contrôle chiffré, exclusivement en lecture, a été lancé sur le titre et l'URL du fil appelant vérifiés par Browser. La recherche de ChatGPT dans le profil Kernel n'a fourni aucune correspondance exacte et l'exécution s'est arrêtée avant toute écriture : [run 40683106426](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40683106426), `conversation_title_not_found`. Les compteurs anonymes indiquent deux liens de conversation visibles, mais aucun ne correspondait au titre ni à l'URL attendue. Une ouverture directe de l'URL a affiché le composeur, sans les contrôles d'historique permettant de prouver le chargement du bon fil. Cela ne permet pas de conclure que le profil distant a accès à cet historique. L'absence de résultat peut relever d'une différence de compte, d'indexation du titre ou de chargement ; aucun envoi n'a été effectué.
+
+Le moteur de séquence et le mode nouveau fil restent disponibles. Avant de valider l'objectif « envoi dans le fil appelant », il reste à obtenir un résultat unique correspondant à la conversation dans la session Kernel, vérifier l'historique chargé et mener un test réel de plusieurs messages avec autorisation explicite et destination certaine. Ne pas déduire un succès à partir des seuls tests unitaires ou du test de recherche de titre absent.
