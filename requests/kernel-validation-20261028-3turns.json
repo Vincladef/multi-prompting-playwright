@@ -1,0 +1,9 @@
+{
+  "mode": "live",
+  "target": "new",
+  "prompts": [
+    "Test de séquence Kernel du 28 octobre : réponds exactement ALPHA.",
+    "Réponds exactement BRAVO.",
+    "Quel mot t'ai-je demandé au premier message de cette conversation ? Réponds en un mot."
+  ]
+}
