@@ -29,9 +29,11 @@ export function chooseUniqueExactTitle(results, title) {
 async function visibleSearchInput(page, timeoutMs) {
   const choices = [
     page.getByRole("dialog").getByRole("searchbox"),
+    page.getByRole("dialog").getByRole("combobox"),
     page.getByRole("dialog").getByRole("textbox"),
     page.getByRole("searchbox"),
-    page.getByPlaceholder(/search chats|search conversations|rechercher des discussions|rechercher dans les discussions/i)
+    page.getByRole("combobox"),
+    page.getByPlaceholder(/search chats|search conversations|search…|rechercher des discussions|rechercher dans les discussions/i)
   ];
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
