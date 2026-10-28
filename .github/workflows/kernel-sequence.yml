@@ -42,6 +42,7 @@ jobs:
           node --check src/kernel-target.mjs
           node --check src/kernel-search-title.mjs
           node --check src/kernel-sealed.mjs
+          node --check src/kernel-request.mjs
       - name: Exécuter la séquence chiffrée dans Kernel
         env:
           KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
