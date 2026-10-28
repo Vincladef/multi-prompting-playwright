@@ -54,7 +54,30 @@ try {
           generic_testids: [...new Set([...document.querySelectorAll("main [data-testid]")]
             .map(e => e.getAttribute("data-testid")).filter(Boolean))].slice(0,18),
           main_children: [...(document.querySelector("main")?.children || [])].slice(0,8)
-            .map(el => ({tag:el.tagName, role:el.getAttribute("role"), testid:el.getAttribute("data-testid")}))
+            .map(el => ({tag:el.tagName, role:el.getAttribute("role"), testid:el.getAttribute("data-testid")})),
+          total_nodes: document.querySelectorAll("main *").length,
+          buttons: [...document.querySelectorAll("main button")].map(el => ({
+            aria: el.getAttribute("aria-label"),
+            title: el.getAttribute("title"),
+            testid: el.getAttribute("data-testid"),
+            type: el.getAttribute("type"),
+            disabled: el.disabled,
+            visible: !!el.getClientRects().length
+          })).slice(-45),
+          semantic_nodes: [...document.querySelectorAll("main [role],main [data-testid],main article,main section")].slice(-65).map(el => ({
+            tag: el.tagName, role: el.getAttribute("role"),
+            testid: el.getAttribute("data-testid"),
+            classes: [...el.classList].filter(s => /^[a-zA-Z0-9_:\\[\\]-]{1,60}$/.test(s)).slice(0,6),
+            children: el.children.length
+          })),
+          class_frequencies: Object.entries([...document.querySelectorAll("main *")].reduce((a,el)=>{
+            for (const token of el.classList) {
+              if (!/^(group|prose|markdown|message|turn|relative|flex|items-|justify-|rounded|self-|text-|bg-)/.test(token)) continue;
+              if (!/^[a-zA-Z0-9_:\\[\\]-]{1,60}$/.test(token)) continue;
+              a[token]=(a[token]||0)+1;
+            } return a;
+          },{})).sort((a,b)=>b[1]-a[1]).slice(0,35)
+
         };
       });
     } else report.conversation_structure = {is_conversation:false,reason:"no_visible_chat_link"};
