@@ -1,0 +1,7 @@
+{
+  "mode": "live",
+  "target": "new",
+  "prompts": [
+    "Test distinct de diagnostic Kernel F : réponds uniquement ECHO."
+  ]
+}
