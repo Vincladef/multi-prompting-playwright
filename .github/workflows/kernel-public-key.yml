@@ -1,0 +1,22 @@
+name: Kernel - Publier clé publique de chiffrement
+on:
+  push:
+    branches: [main]
+    paths:
+      - "probes/kernel-public-key-*.json"
+permissions:
+  contents: read
+jobs:
+  key:
+    if: github.actor == 'Vincladef'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Afficher seulement la clé PUBLIQUE (jamais la clé Kernel)
+        env:
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+        run: node src/kernel-export-public.mjs
