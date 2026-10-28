@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "requests/*.json"
+      - "!requests/chain-*.json"
   workflow_dispatch:
     inputs:
       prompts_json:
