@@ -78,7 +78,7 @@ export async function openConversationByTitle(page, providedTitle, options = {})
   try { input = await visibleSearchInput(page, Math.min(timeoutMs, 6000)); }
   catch (error) {
     // Some ChatGPT layouts expose a search button instead of the shortcut.
-    const button = page.getByRole("button", {name:/search chats|search conversations|rechercher des discussions|rechercher/i}).filter({visible:true});
+    const button = page.getByRole("button", {name:/^search$|search chats|search conversations|rechercher des discussions|^rechercher$/i}).filter({visible:true});
     if (await button.count() !== 1) throw error;
     await button.click();
     input = await visibleSearchInput(page, Math.min(timeoutMs, 6000));
