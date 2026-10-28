@@ -3,11 +3,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "requests/kernel-*.json"
+      - "requests/kernel-*.sealed.json"
   workflow_dispatch:
     inputs:
       request_path:
-        description: "Chemin d'un fichier requests/kernel-*.json (prompts PUBLICS)"
+        description: "Chemin d'un fichier requests/kernel-*.sealed.json (chiffré)"
         required: true
         type: string
 
