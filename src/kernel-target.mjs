@@ -12,7 +12,7 @@ export function resolveTarget(input) {
   try { url = new URL(input.target_url); } catch { raise("invalid_target_url"); }
   if (url.protocol !== "https:" || url.hostname !== "chatgpt.com" ||
       url.port || url.username || url.password || url.search || url.hash ||
-      !/^\\/c\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.pathname))
+      !/^\/c\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.pathname))
     raise("invalid_target_url");
   return url.origin + url.pathname;
 }
