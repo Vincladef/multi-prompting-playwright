@@ -70,6 +70,21 @@ try {
       },{expected:expectedTitle,expectedUrl:expectedUrl});
     } catch {report.search_structure={inspection:"unavailable"};}
   }
+  // Disambiguate search indexing from profile access; read-only navigation.
+  if (page && expectedUrl) {
+    try {
+      await page.goto(expectedUrl,{waitUntil:"domcontentloaded",timeout:30000});
+      await page.waitForTimeout(2500);
+      report.direct_url_probe=await page.evaluate(() => ({
+        url_path_is_conversation:/^\\/c\\//.test(location.pathname),
+        editor_visible:[...document.querySelectorAll('main [role="textbox"][contenteditable="true"]')]
+          .some(el=>!!el.getClientRects().length),
+        user_action_controls:document.querySelectorAll('main button[aria-label="Edit message"]').length,
+        assistant_controls:document.querySelectorAll('main button[aria-label="Regenerate response"]').length
+      }));
+      report.direct_url_probe.same_url=page.url()===expectedUrl;
+    } catch {report.direct_url_probe={accessible:false};}
+  }
   report.status="blocked";
   const safe=new Set(["missing_kernel_secret","invalid_request_path","invalid_request",
     "invalid_envelope","invalid_target_title","invalid_target_url","missing_context",
