@@ -47,7 +47,23 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             path="$REQUEST_PATH"
           else
-            path=$(git diff --name-only --diff-filter=A "$HEAD_COMMIT^" "$HEAD_COMMIT" | grep '^requests/kernel-[a-zA-Z0-9_-]*\.json$' | head -n1 || true)
+            path=$(git diff --name-only --diff-filter=A "$HEAD_COMMIT^" "$HEAD_COMMIT" | grep '^requests/kernel-[a-zA-Z0-9_-]*\.sealed\.json | head -n1 || true)
+          fi
+          if [ -z "$path" ]; then
+            echo "Aucune demande Kernel autorisée dans ce commit."
+            exit 1
+          fi
+          export SEQUENCE_REQUEST="$path"
+          node src/kernel-sequence.mjs
+      - name: Rapport sans contenu des messages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-sequence-result
+          path: artifacts/kernel-sequence.json
+          retention-days: 3
+          if-no-files-found: warn
+ | head -n1 || true)
           fi
           if [ -z "$path" ]; then
             echo "Aucune demande Kernel autorisée dans ce commit."
