@@ -1,0 +1,43 @@
+name: Kernel - Recherche de conversation (lecture seule)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/kernel-title-smoke.yml"
+      - "probes/kernel-title-smoke-*.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multi-prompting-kernel-title-readonly
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.actor == 'Vincladef'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer Kernel
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @onkernel/sdk
+      - name: Vérifier la syntaxe
+        run: node --check src/kernel-title-smoke.mjs
+      - name: Tester la recherche sans envoyer de message
+        env:
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+        run: node src/kernel-title-smoke.mjs
+      - name: Archiver le rapport anonyme
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-title-smoke
+          path: artifacts/kernel-title-smoke.json
+          retention-days: 2
