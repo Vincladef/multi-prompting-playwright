@@ -1,0 +1,49 @@
+name: Multi-Prompting - Relais deterministe
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/chain-*.json"
+  workflow_dispatch:
+    inputs:
+      state:
+        description: Point de reprise encode (demo uniquement, sans donnees privees)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: multi-prompting-chain
+  cancel-in-progress: false
+jobs:
+  chain:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Installer les dependances
+        run: npm install --ignore-scripts --no-audit --no-fund
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - name: Verifier le mecanisme de reprise
+        run: |
+          node --check src/chain-state.mjs
+          node --check src/chain-run.mjs
+          node --test tests/chain-state.test.mjs
+      - name: Executer un lot et declencher le relais
+        env:
+          CHAIN_STATE: ${{ inputs.state || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: node src/chain-run.mjs
+      - name: Sauvegarder le checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-prompting-chain-checkpoint
+          path: artifacts/chain-report.json
+          retention-days: 7
+          if-no-files-found: warn
