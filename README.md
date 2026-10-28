@@ -1,5 +1,14 @@
 # Multi-Prompting Kernel — GitHub Actions + Playwright
 
+## Utilisation recommandée (plugin 1.5.0)
+
+- **Si la demande contient déjà les prompts numérotés**, les conserver mot pour mot et lancer la séquence directement dans **une nouvelle discussion**.
+- **Sinon**, afficher un formulaire interactif : un champ par prompt, ajout/suppression/réorganisation possible, puis un bouton « Lancer la séquence ». Le bouton envoie la liste préparée dans une nouvelle requête de conversation ; l'assistant déclenche alors le workflow chiffré.
+- **Pas de plafond fixe de 20 prompts** : le moteur valide des messages non vides de 10 000 caractères maximum chacun et une charge totale de **250 000 octets UTF-8** avant chiffrement. Le volume réellement exécutable demeure limité par la session Kernel et le job GitHub Actions (actuellement 180 minutes) ; aucune reprise automatique d'une séquence interrompue.
+- Le moteur ne lit pas le texte des réponses et ne construit pas de branches conditionnelles à partir de ce texte.
+
+## Fonctionnement historique
+
 Séquencer des messages utilisateur **distincts** dans **une seule conversation ChatGPT existante identifiée par son URL**, ou dans une nouvelle conversation demandée avec Chromium Kernel distant et un profil authentifié persistant. Aucun agent IA de navigateur, API de modèle, ordinateur ou téléphone local maintenu allumé.
 
 ## État vérifié — 28 octobre 2026
@@ -8,7 +17,7 @@ Séquencer des messages utilisateur **distincts** dans **une seule conversation 
 - **Trois prompts consécutifs : confirmés 3/3** : [workflow live](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40673595092).
 - **Prompts chiffrés, deux tours : confirmés 2/2** : [workflow chiffré](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40674400332).
 - **Tests unitaires** : DOM sémantique, observateur de mutations, cryptographie authentifiée et anciens tests d'orchestration.
-- **Plugin privé** : [Multi-Prompting Kernel 1.3.0](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7).
+- **Plugin privé** : [Multi-Prompting Kernel 1.5.0](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7).
 
 Le moteur n'extrait jamais le texte des réponses. Une réponse est considérée terminée lorsque de nouveaux contrôles assistant (Copy, Rate response, Regenerate response) apparaissent, que la génération n'est plus active et que le DOM est stable.
 
