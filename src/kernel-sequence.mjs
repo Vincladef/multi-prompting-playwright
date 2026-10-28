@@ -9,7 +9,7 @@ const MAX_PROMPTS = 20;
 const REPLY_TIMEOUT = Math.max(180000, Math.min(Number(process.env.REPLY_TIMEOUT_MS || 900000), 2700000));
 const ASSISTANT = '[data-message-author-role="assistant"]';
 const USER = '[data-message-author-role="user"]';
-const COMPOSER = '#prompt-textarea, [data-testid="composer-input"], [role="textbox"][contenteditable="true"], textarea[placeholder]';
+const COMPOSER = '#prompt-textarea, [data-testid="composer-input"], [role="textbox"][contenteditable="true"], [contenteditable="true"], [role="textbox"], textarea[placeholder]';
 const STOP = '[data-testid="stop-button"], [data-testid="composer-stop-button"]';
 const SEND = '[data-testid="send-button"]';
 
@@ -40,26 +40,33 @@ async function assertReady() {
     throw new Error("composer_missing");
 }
 async function sendOne(prompt) {
+  report.phase = "locating_composer";
   await assertReady();
   const usersBefore = await page.locator(USER).count();
   const assistantsBefore = await page.locator(ASSISTANT).count();
   if (await page.evaluate(stopVisible)) throw new Error("previous_generation_active");
   const composer = page.locator(COMPOSER).first();
+  report.phase = "filling_composer";
   await composer.fill(prompt);
+  report.phase = "finding_send";
   const button = page.locator(SEND).first();
   await button.waitFor({ state: "visible", timeout: 20000 });
   if (!(await button.isEnabled())) throw new Error("send_button_disabled");
   await button.click();
+  report.phase = "clicked_send";
   // From this point, sending may have occurred: NEVER auto-retry.
   report.prompts_submitted += 1;
+  report.phase = "checking_user_message";
   await page.waitForFunction(expected => document.querySelectorAll(
     '[data-message-author-role="user"]').length >= expected,
     usersBefore + 1, { timeout: 30000 });
   if (await page.locator(USER).count() !== usersBefore + 1)
     throw new Error("ambiguous_user_message_count");
+  report.phase = "checking_assistant_message";
   await page.waitForFunction(expected => document.querySelectorAll(
     '[data-message-author-role="assistant"]').length >= expected,
     assistantsBefore + 1, { timeout: REPLY_TIMEOUT });
+  report.phase = "checking_completion";
   await page.waitForFunction(() => {
     const els = Array.from(document.querySelectorAll(
       '[data-testid="stop-button"], [data-testid="composer-stop-button"]'));
@@ -72,6 +79,7 @@ async function sendOne(prompt) {
   if (await page.locator(ASSISTANT).count() !== assistantsBefore + 1)
     throw new Error("ambiguous_assistant_message_count");
   report.responses_confirmed += 1;
+  report.phase = "response_confirmed";
 }
 try {
   if (!process.env.KERNEL_API_KEY) throw new Error("missing_kernel_secret");
