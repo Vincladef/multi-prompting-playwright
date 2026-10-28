@@ -1,0 +1,6 @@
+{
+  "type": "kernel-readonly-smoke",
+  "profile": "multi-prompting",
+  "chatgpt_messages": "no",
+  "private_data_collection": "no"
+}
