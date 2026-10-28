@@ -57,13 +57,15 @@ async function matchingLinks(page, title) {
   if (!region) throw new Error("search_results_region_missing");
   const anchors = region.locator('a[href*="/c/"]');
   return anchors.evaluateAll((links, expected) => {
-    const norm = value => (value || "").normalize("NFC").trim();
+    const norm = value => (value || "").normalize("NFC").replace(/\\s+/g," ").trim();
     const out = [];
     for (const a of links) {
       if (!a.getClientRects().length) continue;
-      // Only exact leaf-node titles, never snippets or arbitrary chat content.
+      // Search highlights may split the title across nested <mark> nodes.
+      // Require an element whose entire normalized text equals the title;
+      // never accept a substring match from a description or preview.
       const nodes = [a, ...a.querySelectorAll("*")];
-      if (!nodes.some(el => el.children.length === 0 && norm(el.textContent) === expected))
+      if (!nodes.some(el => norm(el.textContent) === norm(expected)))
         continue;
       out.push({title:expected, href:a.href});
     }
