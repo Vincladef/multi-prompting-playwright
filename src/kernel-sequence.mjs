@@ -5,6 +5,7 @@ import { basename } from "node:path";
 import { inspectChatDom, installChatObserver } from "./kernel-dom.mjs";
 import { unsealRequest } from "./kernel-sealed.mjs";
 import { resolveTarget } from "./kernel-target.mjs";
+import { validateSequenceRequest } from "./kernel-request.mjs";
 import { openConversationByTitle } from "./kernel-search-title.mjs";
 
 // No message text extraction, screenshots, cookies, signed URLs or private thread URLs.
@@ -129,12 +130,7 @@ try {
   report.phase = "decrypting_request";
   const envelope = JSON.parse(await readFile(path, "utf8"));
   const input = unsealRequest(envelope, process.env.KERNEL_API_KEY);
-  if (input.mode !== "live" ||
-      !Array.isArray(input.prompts) || input.prompts.length < 1 ||
-      input.prompts.length > 20 ||
-      !input.prompts.every(s => typeof s === "string" && !!s.trim() && s.length <= 10000))
-    fail("invalid_request");
-  report.prompts_total = input.prompts.length;
+  report.prompts_total = validateSequenceRequest(input);
   const destination = resolveTarget(input);
   const lookupTitle = destination && typeof destination === "object" ? destination.title : null;
   const directUrl = typeof destination === "string" ? destination : null;
@@ -191,6 +187,7 @@ try {
   const safe = new Set([
     "missing_kernel_secret", "invalid_request_path", "invalid_request",
     "missing_context", "composer_missing", "send_button_missing", "send_disabled",
+    "request_too_large",
     "security_challenge", "generation_already_active", "wrong_conversation",
     "conversation_changed", "unexpected_turn_counts", "unexpected_user_turns",
     "timeout_user", "timeout_assistant", "ambiguous_completion",
