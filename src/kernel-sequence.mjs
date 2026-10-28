@@ -3,6 +3,7 @@ import { chromium } from "playwright";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { inspectChatDom, installChatObserver } from "./kernel-dom.mjs";
+import { unsealRequest } from "./kernel-sealed.mjs";
 
 // No message text extraction, screenshots, cookies, signed URLs or private thread URLs.
 // Only generic DOM actions of the currently authenticated ChatGPT interface.
@@ -113,9 +114,11 @@ async function sendAndConfirm(prompt, index) {
 try {
   if (!process.env.KERNEL_API_KEY) fail("missing_kernel_secret");
   const path = process.env.SEQUENCE_REQUEST || "";
-  if (!/^requests\/kernel-[a-zA-Z0-9_-]{1,70}\.json$/.test(path) ||
+  if (!/^requests\/kernel-[a-zA-Z0-9_-]{1,70}\.sealed\.json$/.test(path) ||
       basename(path).includes("..")) fail("invalid_request_path");
-  const input = JSON.parse(await readFile(path, "utf8"));
+  report.phase = "decrypting_request";
+  const envelope = JSON.parse(await readFile(path, "utf8"));
+  const input = unsealRequest(envelope, process.env.KERNEL_API_KEY);
   if (input.mode !== "live" || (input.target && input.target !== "new") ||
       !Array.isArray(input.prompts) || input.prompts.length < 1 ||
       input.prompts.length > 20 ||
@@ -157,7 +160,7 @@ try {
     "security_challenge", "generation_already_active", "wrong_conversation",
     "conversation_changed", "unexpected_turn_counts", "unexpected_user_turns",
     "timeout_user", "timeout_assistant", "ambiguous_completion",
-    "not_new_conversation"
+    "not_new_conversation", "invalid_envelope", "invalid_secret_length"
   ]);
   report.error = safe.has(error?.message) ? error.message : "browser_or_dom_failure";
   report.error_type = ["TimeoutError","APIError","APIConnectionError"].includes(error?.name)
