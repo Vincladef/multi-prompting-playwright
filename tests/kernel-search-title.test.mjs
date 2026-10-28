@@ -57,3 +57,22 @@ test("Browser integration: identical titles fail closed without navigation", {ti
     assert.equal(page.url(),"https://chatgpt.com/");
   } finally { await browser.close(); }
 });
+
+test("Browser integration: Search button and combobox fallback", {timeout:20000}, async () => {
+  const browser = await chromium.launch({headless:true});
+  try {
+    const page = await browser.newPage();
+    const html = `<!doctype html><html><body><main><button id="search" aria-label="Search">Search</button></main>
+      <div role="dialog" id="dialog" style="display:none">
+      <input role="combobox" placeholder="Search…">
+      <a href="${a}"><span>Le titre voulu</span></a></div>
+      <script>
+        document.getElementById("search").addEventListener("click",()=>{
+          document.getElementById("dialog").style.display="block";
+        });
+      </script></body></html>`;
+    await page.route("https://chatgpt.com/**", route => route.fulfill({status:200,contentType:"text/html",body:html}));
+    await page.goto("https://chatgpt.com/");
+    assert.equal(await openConversationByTitle(page,"Le titre voulu",{timeoutMs:7500,stableSamples:2}),a);
+  } finally {await browser.close();}
+});
