@@ -8,7 +8,7 @@ import { openConversationByTitle } from "./kernel-search-title.mjs";
 // Read-only positive integration test: URL and title decrypted in memory.
 // Never print or persist private title, URL, message text or DOM content.
 const report={kind:"kernel-title-positive-readonly",status:"initializing",cleanup:"not_needed"};
-let kernel,session,browser,page,expectedTitle;
+let kernel,session,browser,page,expectedTitle,expectedUrl;
 try {
   const secret=process.env.KERNEL_API_KEY;
   if (!secret) throw new Error("missing_kernel_secret");
@@ -18,6 +18,7 @@ try {
   const data=unsealRequest(JSON.parse(await readFile(path,"utf8")),secret);
   if (data.kind !== "title-readonly-match") throw new Error("invalid_request");
   const expected=resolveTarget({target:"existing",target_url:data.expected_target_url});
+  expectedUrl=expected;
   const title=resolveTarget({target:"existing",target_title:data.target_title}).title;
   expectedTitle=title;
   kernel=new Kernel({apiKey:secret});
@@ -39,7 +40,7 @@ try {
 } catch(e) {
   if(page && expectedTitle) {
     try {
-      report.search_structure=await page.evaluate(expected => {
+      report.search_structure=await page.evaluate(({expected,expectedUrl}) => {
         const visible=el=>!!el.getClientRects().length &&
           getComputedStyle(el).visibility!=="hidden";
         const dialog=[...document.querySelectorAll('[role="dialog"]')].find(visible);
@@ -48,7 +49,13 @@ try {
         const exact=el=>[el,...el.querySelectorAll("*")].some(n=>n.children.length===0 &&
           (n.textContent||"").normalize("NFC").trim()===expected);
         const chatLink=el=>el.tagName==="A" && /\/c\//.test(el.getAttribute("href")||"");
+        const sameUrl=el=>el.tagName==="A" && el.href===expectedUrl;
+        const norm=v=>(v||"").normalize("NFC").replace(/\\s+/g," ").trim();
+        const anyExact=el=>[el,...el.querySelectorAll("*")].some(n=>norm(n.textContent)===norm(expected));
         return {
+          expected_link_visible:items.some(sameUrl),
+          expected_link_title_exact:items.some(el=>sameUrl(el)&&anyExact(el)),
+          any_exact_title:items.some(anyExact),
           dialog_visible:!!dialog,
           search_path:location.pathname.startsWith("/search"),
           input_roles:[...document.querySelectorAll("input")].filter(visible).map(el=>el.getAttribute("role")).slice(0,5),
@@ -57,9 +64,10 @@ try {
           visible_chat_anchors:items.filter(chatLink).length,
           matching_title_anchors:items.filter(el=>chatLink(el)&&exact(el)).length,
           types:items.slice(0,18).map(el=>({tag:el.tagName.toLowerCase(),role:el.getAttribute("role"),
-            testid:el.getAttribute("data-testid"),href_kind:chatLink(el)?"chat":"other",exact_title:exact(el)}))
+            testid:el.getAttribute("data-testid"),href_kind:chatLink(el)?"chat":"other",
+            exact_title:exact(el),nested_exact_title:anyExact(el),expected_href:sameUrl(el)}))
         };
-      },expectedTitle);
+      },{expected:expectedTitle,expectedUrl:expectedUrl});
     } catch {report.search_structure={inspection:"unavailable"};}
   }
   report.status="blocked";
