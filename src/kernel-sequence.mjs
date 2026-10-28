@@ -87,6 +87,7 @@ async function sendAndConfirm(prompt, index) {
   if (index === 0) threadPath = new URL(page.url()).pathname;
   if (new URL(page.url()).pathname !== threadPath) fail("conversation_changed");
   report.prompts_submitted += 1;
+  console.log("KERNEL_STATE=" + JSON.stringify({turn:index+1,phase:"user_confirmed",sent:report.prompts_submitted,completed:report.responses_confirmed}));
   report.steps.push({number:index + 1, state:"user_confirmed"});
 
   report.phase = "reply_confirmation_" + (index + 1);
@@ -107,6 +108,7 @@ async function sendAndConfirm(prompt, index) {
     fail("ambiguous_completion");
 
   report.responses_confirmed += 1;
+  console.log("KERNEL_STATE=" + JSON.stringify({turn:index+1,phase:"response_confirmed",sent:report.prompts_submitted,completed:report.responses_confirmed}));
   report.steps[index] = {number:index + 1, state:"response_confirmed"};
   report.phase = "reply_confirmed_" + (index + 1);
 }
