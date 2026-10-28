@@ -1,6 +1,5 @@
-// Deterministic title lookup, opt-in only. Never log a private chat title or URL.
-// This module is intentionally independent of new-chat execution.
-// Run browser interactions only in an environment authorized to access the target.
+// Deterministic title lookup in the already-authenticated ChatGPT UI.
+// This module inspects search-result titles and hrefs only, never chat messages.
 const CHAT_PATH = /^\/c\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function validateExactTitle(title) {
@@ -27,80 +26,92 @@ export function chooseUniqueExactTitle(results, title) {
   return [...exact][0];
 }
 
-async function visibleSearchInput(page) {
-  // Prefer semantic controls. Do not guess the user's open conversation.
+async function visibleSearchInput(page, timeoutMs) {
   const choices = [
     page.getByRole("dialog").getByRole("searchbox"),
     page.getByRole("dialog").getByRole("textbox"),
     page.getByRole("searchbox"),
     page.getByPlaceholder(/search chats|search conversations|rechercher des discussions|rechercher dans les discussions/i)
   ];
-  for (const choice of choices) {
-    const visible = choice.filter({visible:true});
-    if (await visible.count() === 1) return visible.first();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    for (const choice of choices) {
+      if (await choice.filter({visible:true}).count() === 1)
+        return choice.filter({visible:true}).first();
+    }
+    await page.waitForTimeout(200);
   }
   throw new Error("search_input_not_found");
 }
 
-async function matchingLinks(page, title) {
-  // Search-result anchors only, never sidebar history or arbitrary buttons.
+function resultRegion(page) {
   const dialog = page.getByRole("dialog").filter({visible:true});
+  return { dialog, main:page.locator("main") };
+}
+async function matchingLinks(page, title) {
+  const {dialog, main} = resultRegion(page);
   const region = await dialog.count() === 1 ? dialog.first() :
-    /^\/search(?:\/|$)/.test(new URL(page.url()).pathname) ? page.locator("main") : null;
+    /^\/search(?:\/|$)/.test(new URL(page.url()).pathname) ? main : null;
   if (!region) throw new Error("search_results_region_missing");
   const anchors = region.locator('a[href*="/c/"]');
-  // Only inspect text in search-result link elements, not conversation bodies.
-  return await anchors.evaluateAll((links, expected) => {
+  return anchors.evaluateAll((links, expected) => {
     const norm = value => (value || "").normalize("NFC").trim();
     const out = [];
     for (const a of links) {
       if (!a.getClientRects().length) continue;
-      const titleNodes = [a, ...a.querySelectorAll("*")];
-      if (!titleNodes.some(el =>
-        el.children.length === 0 && norm(el.textContent) === expected)) continue;
+      // Only exact leaf-node titles, never snippets or arbitrary chat content.
+      const nodes = [a, ...a.querySelectorAll("*")];
+      if (!nodes.some(el => el.children.length === 0 && norm(el.textContent) === expected))
+        continue;
       out.push({title:expected, href:a.href});
     }
     return out;
   }, title);
 }
 
-export async function openConversationByTitle(page, providedTitle) {
+export async function openConversationByTitle(page, providedTitle, options = {}) {
   const title = validateExactTitle(providedTitle);
+  const timeoutMs = options.timeoutMs ?? 30000;
+  const stableSamples = options.stableSamples ?? 5;
   await page.keyboard.press("ControlOrMeta+k");
-  const input = await visibleSearchInput(page);
+  let input;
+  try { input = await visibleSearchInput(page, Math.min(timeoutMs, 6000)); }
+  catch (error) {
+    // Some ChatGPT layouts expose a search button instead of the shortcut.
+    const button = page.getByRole("button", {name:/search chats|search conversations|rechercher des discussions|rechercher/i}).filter({visible:true});
+    if (await button.count() !== 1) throw error;
+    await button.click();
+    input = await visibleSearchInput(page, Math.min(timeoutMs, 6000));
+  }
   await input.fill(title);
 
-  // Require stable results, and reject duplicate exact titles.
   let selected = null, stable = 0;
-  const deadline = Date.now() + 30000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const candidates = await matchingLinks(page, title);
     if (candidates.length) {
+      // Duplicates are errors, never select the first search hit.
       const next = chooseUniqueExactTitle(candidates, title);
       stable = next === selected ? stable + 1 : 1;
       selected = next;
-      if (stable >= 5) break;
+      if (stable >= stableSamples) break;
     } else {
-      selected = null;
-      stable = 0;
+      selected = null; stable = 0;
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
   }
-  if (!selected || stable < 5) throw new Error("conversation_title_not_found");
+  if (!selected || stable < stableSamples) throw new Error("conversation_title_not_found");
 
-  // Click only an anchor whose href was independently validated.
-  const region = await page.getByRole("dialog").filter({visible:true}).count() === 1
-    ? page.getByRole("dialog").filter({visible:true}).first()
-    : page.locator("main");
-  const target = region.locator('a[href*="/c/"]').filter({
-    has:page.getByText(title, {exact:true})
-  });
-  if (await target.count() !== 1) throw new Error("conversation_title_ambiguous");
-  const href = await target.first().getAttribute("href");
-  if (new URL(href, "https://chatgpt.com").href !== selected)
+  // Re-evaluate immediately before clicking to close the selection race.
+  if (chooseUniqueExactTitle(await matchingLinks(page, title), title) !== selected)
     throw new Error("conversation_search_changed");
-  await target.first().click();
+  const dialog = page.getByRole("dialog").filter({visible:true});
+  const region = await dialog.count() === 1 ? dialog.first() : page.locator("main");
+  const path = new URL(selected).pathname;
+  const matchingAnchor = region.locator('a[href="/c/' + path.slice(3) + '"], a[href="' + selected + '"]');
+  if (await matchingAnchor.count() !== 1) throw new Error("conversation_title_ambiguous");
+  await matchingAnchor.click();
   await page.waitForURL(selected, {timeout:30000});
   if (page.url() !== selected) throw new Error("conversation_search_changed");
-  return selected;  // Caller may keep in memory only; never print it.
+  return selected; // Keep the private URL in memory, not in logs/artifacts.
 }

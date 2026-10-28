@@ -47,3 +47,23 @@ test("Observer sees conversation DOM changes and ignores editor changes", async 
     assert.ok(afterTurn.mutationVersion > before.mutationVersion);
   } finally { await browser.close(); }
 });
+
+test("Existing history: unequal counters can still have a finished last turn", async () => {
+  const browser = await chromium.launch({headless:true});
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<main><div role="textbox" contenteditable="true"></div>
+      <button aria-label="Copy"></button><button aria-label="Rate response"></button>
+      <button aria-label="Regenerate response"></button>
+      <button aria-label="Edit message"></button>
+      <button aria-label="Copy"></button><button aria-label="Rate response"></button>
+      <button aria-label="Regenerate response"></button></main>`);
+    let state = await page.evaluate(inspectChatDom);
+    assert.equal(state.userActions, 1);
+    assert.equal(state.assistantCompleted, 2);
+    assert.equal(state.lastTurnCompleted, true);
+    await page.locator("main").evaluate(el => el.insertAdjacentHTML("beforeend", '<button aria-label="Edit message"></button>'));
+    state = await page.evaluate(inspectChatDom);
+    assert.equal(state.lastTurnCompleted, false);
+  } finally { await browser.close(); }
+});
