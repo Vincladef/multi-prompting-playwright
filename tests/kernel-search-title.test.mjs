@@ -12,7 +12,7 @@ test("Exact title matching, canonical URLs and ambiguity rejection", () => {
   assert.throws(()=>chooseUniqueExactTitle([{title:"Bonjour",href:a},{title:"Bonjour",href:b}], "Bonjour"), /ambiguous/);
   assert.throws(()=>chooseUniqueExactTitle([{title:"Bonjour",href:a+"?share=1"}], "Bonjour"), /not_found/);
   assert.throws(()=>chooseUniqueExactTitle([{title:"Bonjour",href:"https://chatgpt.com.evil.test/c/12345678-1234-1234-1234-123456789abc"}], "Bonjour"), /not_found/);
-  assert.throws(()=>validateExactTitle("A\\nB"), /invalid_target_title/);
+  assert.throws(()=>validateExactTitle("A\nB"), /invalid_target_title/);
 });
 
 function fixture(links) {
