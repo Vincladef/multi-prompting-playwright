@@ -1,0 +1,32 @@
+name: Kernel - Diagnostic non envoyant du composeur
+on:
+  push:
+    branches: [main]
+    paths: ["probes/kernel-compose-*.json"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.actor == 'Vincladef'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Dépendances
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @onkernel/sdk
+      - name: Inspecter les contrôles sans cliquer ni envoyer
+        env:
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+        run: node src/kernel-compose-inspect.mjs
+      - name: Rapport de structure du composeur
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-compose-diagnostic
+          path: artifacts/kernel-compose-diagnostic.json
+          retention-days: 2
