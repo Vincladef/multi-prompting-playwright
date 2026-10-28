@@ -11,7 +11,7 @@ const ASSISTANT = '[data-message-author-role="assistant"]';
 const USER = '[data-message-author-role="user"]';
 const COMPOSER = '#prompt-textarea, [data-testid="composer-input"], [role="textbox"][contenteditable="true"], [contenteditable="true"], [role="textbox"], textarea[placeholder]';
 const STOP = '[data-testid="stop-button"], [data-testid="composer-stop-button"]';
-const SEND = '[data-testid="send-button"]';
+const SEND = '[data-testid="send-button"], [data-testid*="send"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[aria-label="Envoyer"], button[aria-label="Envoyer le message"], button[type="submit"]';
 
 const report = { kind: "kernel-sequence", mode: "live", status: "initializing", phase: "initialization",
   prompts_total: 0, prompts_submitted: 0, responses_confirmed: 0,
@@ -49,11 +49,17 @@ async function sendOne(prompt) {
   report.phase = "filling_composer";
   await composer.fill(prompt);
   report.phase = "finding_send";
-  const button = page.locator(SEND).first();
-  await button.waitFor({ state: "visible", timeout: 20000 });
-  if (!(await button.isEnabled())) throw new Error("send_button_disabled");
-  await button.click();
-  report.phase = "clicked_send";
+  const button = page.locator(SEND).filter({ visible: true }).first();
+  // A single explicit click, or a single Enter key as a conservative fallback.
+  // Either action might submit. Never retry after either action.
+  if (await button.count() > 0) {
+    if (!(await button.isEnabled())) throw new Error("send_button_disabled");
+    await button.click();
+    report.phase = "clicked_send";
+  } else {
+    report.phase = "pressed_enter";
+    await composer.press("Enter");
+  }
   // From this point, sending may have occurred: NEVER auto-retry.
   report.prompts_submitted += 1;
   report.phase = "checking_user_message";
@@ -137,6 +143,8 @@ try {
         role_textbox: await page.getByRole("textbox").count(),
         textarea: await page.locator("textarea").count(),
         send_testid: await page.locator('[data-testid="send-button"]').count(),
+        send_candidates: await page.locator(SEND).count(),
+        send_aria: await page.getByRole("button", { name: /send|envoyer/i }).count(),
         login_button: await page.getByRole("button", { name: /log in|se connecter/i }).count(),
         challenge_title: /just a moment|attention required|verification/i.test(await page.title())
       };
