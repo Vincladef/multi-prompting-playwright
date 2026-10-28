@@ -8,7 +8,7 @@ Séquencer des messages utilisateur **distincts** dans **une seule conversation 
 - **Trois prompts consécutifs : confirmés 3/3** : [workflow live](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40673595092).
 - **Prompts chiffrés, deux tours : confirmés 2/2** : [workflow chiffré](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40674400332).
 - **Tests unitaires** : DOM sémantique, observateur de mutations, cryptographie authentifiée et anciens tests d'orchestration.
-- **Plugin privé** : [Multi-Prompting Kernel 1.1.0](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7).
+- **Plugin privé** : [Multi-Prompting Kernel 1.3.0](https://chatgpt.com/plugins/plugins_6ae1c9a72a94819181afc5a91d29e1f7).
 
 Le moteur n'extrait jamais le texte des réponses. Une réponse est considérée terminée lorsque de nouveaux contrôles assistant (Copy, Rate response, Regenerate response) apparaissent, que la génération n'est plus active et que le DOM est stable.
 
@@ -34,20 +34,22 @@ Le moteur n'extrait jamais le texte des réponses. Une réponse est considérée
 
 [Workflow réel chiffré](https://github.com/Vincladef/multi-prompting-playwright/actions/workflows/kernel-sequence.yml) : déclenchement automatique lorsqu'un nouveau fichier requests/kernel-*.sealed.json est ajouté. Pour fabriquer l'enveloppe, utiliser src/kernel-sealed.mjs (sealRequest) avec la clé publique ou le script de référence du plugin. **Ne jamais committer les prompts en clair.**
 
-Une séquence conserve **un navigateur et une conversation uniques**. Le mode `caller` ou `existing` exige l'URL canonique exacte `https://chatgpt.com/c/UUID` placée dans l'enveloppe chiffrée ; le mode `new` reste disponible. Ses statuts sont completed, blocked ou ambiguous. Aucun renvoi automatique n'est autorisé si l'envoi peut avoir eu lieu.
+Une séquence conserve **un navigateur et une conversation uniques**. Le mode `caller` ou `existing` accepte soit l'URL canonique exacte `https://chatgpt.com/c/UUID`, soit `target_title` avec un titre exact et unique, placés dans l'enveloppe chiffrée ; le mode `new` reste disponible. Ses statuts sont completed, blocked ou ambiguous. Aucun renvoi automatique n'est autorisé si l'envoi peut avoir eu lieu.
 
 Les anciens workflows run-sequence.yml et chain-sequence.yml concernent des **conversations simulées**, conservées pour la régression. Le moteur réel actuel est src/kernel-sequence.mjs.
 
 ## Limites
 
-Le moteur ne vérifie ni la justesse ni le contenu textuel des réponses. La structure du site peut évoluer. **Mode conversation existante implémenté mais pas encore validé en exécution réelle.** Le plugin ne reçoit pas automatiquement l'identifiant de la conversation qui l'invoque : il doit résoudre son URL avec certitude (lien fourni ou onglet Browser identifiable), sinon ne lance rien. Aucune URL privée n'est journalisée.
+Le moteur ne vérifie ni la justesse ni le contenu textuel des réponses. La structure du site peut évoluer. **Mode conversation existante : la recherche native a été vérifiée en lecture seule sur Kernel, mais la sélection d'un résultat réel et l'envoi dans ce fil n'ont pas encore été validés de bout en bout.** Le plugin ne reçoit pas automatiquement l'identifiant de la conversation qui l'invoque : il doit résoudre son URL avec certitude (lien fourni ou onglet Browser identifiable), sinon ne lance rien. Aucune URL privée n'est journalisée.
 
 Voir [docs/KERNEL_STATUS.md](docs/KERNEL_STATUS.md) pour les résultats exacts.
 
-## Ciblage par titre exact (branche de développement)
+## Ciblage par titre exact (main, plugin 1.3.0)
 
 Les modes `caller` et `existing` acceptent désormais **soit** `target_url` **soit** `target_title` dans la charge chiffrée ; les deux ensemble sont refusés. Par exemple : `{"mode":"live","target":"caller","target_title":"Titre exact transmis","prompts":["..."]}`. Le plugin doit récupérer le titre auprès de l'utilisateur ou d'un contexte d'onglet identifié de manière certaine ; le titre du fil appelant ne lui est **pas automatiquement transmis**. Ne jamais déduire ce titre à partir du sujet de la conversation.
 
 Le navigateur authentifié effectue `Ctrl+K`, recherche ce titre, contrôle une correspondance textuelle et une destination canonique uniques, puis vérifie l'URL après ouverture. En cas de titres homonymes, absence de résultat ou changement du DOM : arrêt avant tout envoi. Le mode `new` et le ciblage par URL restent inchangés. Le traitement ne lit que les titres des résultats de recherche, jamais les réponses du fil.
 
 Les historiques dont les compteurs utilisateur/assistant sont différents ne sont plus bloqués pour cette seule raison ; le contrôle porte également sur le dernier tour visible. Si les anciens tours sont virtualisés ou incomplets, le moteur reste volontairement prudent. Les tests avec navigateur simulé ne prouvent pas une exécution Kernel réelle sur un fil préexistant.
+
+Test réel en lecture seule : [recherche native Kernel réussie, sans aucun message](https://github.com/Vincladef/multi-prompting-playwright/actions/runs/40682023141). Des tests précédents ont permis d'identifier le bouton `Search` et le champ `combobox` de l'interface actuelle.
