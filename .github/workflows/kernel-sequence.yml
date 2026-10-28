@@ -1,0 +1,63 @@
+name: Kernel - Séquence réelle (nouvelle conversation)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/kernel-*.json"
+  workflow_dispatch:
+    inputs:
+      request_path:
+        description: "Chemin d'un fichier requests/kernel-*.json (prompts PUBLICS)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multi-prompting-kernel-live
+  cancel-in-progress: false
+
+jobs:
+  sequence:
+    if: github.actor == 'Vincladef'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer le SDK Kernel
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @onkernel/sdk
+      - name: Contrôle syntaxique
+        run: node --check src/kernel-sequence.mjs
+      - name: Pilotage Playwright avec navigateur cloud authentifié
+        env:
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
+          REQUEST_PATH: ${{ github.event.inputs.request_path }}
+          HEAD_COMMIT: ${{ github.event.head_commit.id }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            path="$REQUEST_PATH"
+          else
+            path=$(git diff-tree --no-commit-id --name-only -r "$HEAD_COMMIT" | grep '^requests/kernel-[a-zA-Z0-9_-]*\.json$' | head -n1 || true)
+          fi
+          if [ -z "$path" ]; then
+            echo "Aucune demande Kernel autorisée dans ce commit."
+            exit 1
+          fi
+          export SEQUENCE_REQUEST="$path"
+          node src/kernel-sequence.mjs
+      - name: Rapport sans contenu des messages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-sequence-result
+          path: artifacts/kernel-sequence.json
+          retention-days: 3
+          if-no-files-found: warn
