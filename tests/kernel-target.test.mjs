@@ -26,7 +26,7 @@ test("Title targeting is supported without a URL and never auto-guessed", () => 
   assert.deepEqual(resolveTarget({target:"caller",target_title:"  Ma conversation  "}), {title:"Ma conversation"});
   assert.deepEqual(resolveTarget({target:"existing",target_title:"Étude ergonomique"}), {title:"Étude ergonomique"});
   assert.throws(()=>resolveTarget({target:"caller",target_title:""}), /invalid_target_title/);
-  assert.throws(()=>resolveTarget({target:"caller",target_title:"A\\nB"}), /invalid_target_title/);
+  assert.throws(()=>resolveTarget({target:"caller",target_title:"A\nB"}), /invalid_target_title/);
   assert.throws(()=>resolveTarget({target:"caller",target_url:caller,target_title:"Mon fil"}), /conflicting_target_identifiers/);
   assert.throws(()=>resolveTarget({target:"new",target_title:"Mon fil"}), /invalid_target/);
 });
