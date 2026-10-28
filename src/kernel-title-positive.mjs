@@ -76,7 +76,7 @@ try {
       await page.goto(expectedUrl,{waitUntil:"domcontentloaded",timeout:30000});
       await page.waitForTimeout(2500);
       report.direct_url_probe=await page.evaluate(() => ({
-        url_path_is_conversation:/^\\/c\\//.test(location.pathname),
+        url_path_is_conversation:location.pathname.startsWith("/c/"),
         editor_visible:[...document.querySelectorAll('main [role="textbox"][contenteditable="true"]')]
           .some(el=>!!el.getClientRects().length),
         user_action_controls:document.querySelectorAll('main button[aria-label="Edit message"]').length,
